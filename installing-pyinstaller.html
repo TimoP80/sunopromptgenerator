@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How to Build the Executable</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+            color: #333;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 40px;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
+        }
+
+        .header p {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+
+        .card {
+            background: white;
+            border-radius: 20px;
+            padding: 30px 40px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            margin-bottom: 30px;
+        }
+
+        .card h2 {
+            color: #667eea;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #f0f2ff;
+            padding-bottom: 10px;
+        }
+
+        .card p {
+            line-height: 1.7;
+            margin-bottom: 15px;
+        }
+
+        .card ul {
+            list-style-position: inside;
+            margin-bottom: 15px;
+        }
+
+        .card li {
+            margin-bottom: 10px;
+        }
+
+        pre {
+            background-color: #f8f9ff;
+            border: 1px solid #e8ebff;
+            border-radius: 8px;
+            padding: 15px;
+            overflow-x: auto;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            margin-top: 10px;
+            margin-bottom: 20px;
+        }
+
+        code {
+            font-family: 'Courier New', Courier, monospace;
+            color: #c62828;
+            font-size: 0.95em;
+        }
+
+        .note {
+            background: #fff9c4;
+            border-left: 4px solid #fdd835;
+            padding: 15px;
+            border-radius: 4px;
+            margin-top: 20px;
+        }
+
+        .note strong {
+            color: #f57f17;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📦 Building the Executable</h1>
+            <p>A step-by-step guide to creating a standalone .exe with PyInstaller</p>
+        </div>
+
+        <div class="card">
+            <h2>Step 1: Install PyInstaller</h2>
+            <p>First, ensure your virtual environment is activated. Then, install PyInstaller using pip.</p>
+            <pre><code>pip install pyinstaller</code></pre>
+        </div>
+
+        <div class="card">
+            <h2>Step 2: Prepare External Dependencies</h2>
+            <p>This application has one critical external dependency that PyInstaller cannot bundle automatically: <strong>ffmpeg.exe</strong>.</p>
+            <ul>
+                <li>Locate the <code>ffmpeg.exe</code> file on your system.</li>
+                <li>Keep its location handy. You will need to manually copy this file into the final application folder after the build is complete.</li>
+            </ul>
+        </div>
+
+        <div class="card">
+            <h2>Step 3: Create the PyInstaller Spec File</h2>
+            <p>For a complex application with data files and hidden imports, using a <code>.spec</code> file is the most reliable method.</p>
+            <p>First, run this command in your project's root directory to generate a base spec file. <strong>Note:</strong> This command will likely fail, which is expected. Its only purpose is to create the file.</p>
+            <pre><code>pyinstaller --name SunoPromptGenerator --windowed --noconfirm app.py</code></pre>
+            <p>Now, open the newly created <code>SunoPromptGenerator.spec</code> file and <strong>replace its entire contents</strong> with the code below. This configuration tells PyInstaller how to handle the HTML templates and the hidden dependencies from the machine learning libraries.</p>
+            <pre><code># -*- mode: python ; coding: utf-8 -*-
+
+block_cipher = None
+
+a = Analysis(
+    ['app.py'],
+    pathex=[],
+    binaries=[],
+    datas=[('templates', 'templates')],  # This line bundles the 'templates' folder
+    hiddenimports=[
+        'spleeter',
+        'whisper',
+        'sklearn.utils._weight_vector' # Common hidden import for ML libs
+    ],
+    hookspath=[],
+    hooksconfig={},
+    runtime_hooks=[],
+    excludes=[],
+    win_no_prefer_redirects=False,
+    win_private_assemblies=False,
+    cipher=block_cipher,
+    noarchive=False,
+)
+pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
+
+exe = EXE(
+    pyz,
+    a.scripts,
+    a.binaries,
+    a.zipfiles,
+    a.datas,
+    [],
+    name='SunoPromptGenerator',
+    debug=False,
+    bootloader_ignore_signals=False,
+    strip=False,
+    upx=True,
+    upx_exclude=[],
+    runtime_tmpdir=None,
+    console=False, # Set to False for a GUI app (no console window)
+    disable_windowed_traceback=False,
+    argv_emulation=False,
+    target_arch=None,
+    codesign_identity=None,
+    entitlements_file=None,
+)
+</code></pre>
+        </div>
+
+        <div class="card">
+            <h2>Step 4: Build the Application</h2>
+            <p>With the spec file correctly configured, you can now build the executable. This process will take several minutes as it bundles large libraries like TensorFlow and PyTorch.</p>
+            <pre><code>pyinstaller SunoPromptGenerator.spec</code></pre>
+            <p>When it's finished, you will find a new folder named <code>dist</code> in your project directory.</p>
+        </div>
+
+        <div class="card">
+            <h2>Step 5: Final Assembly and Distribution</h2>
+            <p>The final step is to assemble the application for distribution.</p>
+            <ol>
+                <li>Navigate into the <code>dist/SunoPromptGenerator</code> folder.</li>
+                <li>Inside, you will find <code>SunoPromptGenerator.exe</code> along with many other dependency files.</li>
+                <li><strong>Copy <code>ffmpeg.exe</code></strong> (from Step 2) into this same folder.</li>
+            </ol>
+            <p>The entire <code>dist/SunoPromptGenerator</code> folder is now your complete, distributable application. You can zip this folder and share it with others. Users can run <code>SunoPromptGenerator.exe</code> to start the server.</p>
+            <div class="note">
+                <p><strong>Important:</strong> The first time a user runs the application and analyzes a song with vocals, it will still require an <strong>internet connection</strong> to download the pre-trained <code>spleeter</code> and <code>whisper</code> models. This is a one-time setup process.</p>
+            </div>
+        </div>
+
+    </div>
+</body>
+</html>

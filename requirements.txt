@@ -1,0 +1,16 @@
+flask==2.0.3
+flask-cors==3.0.10
+librosa==0.10.2
+numpy==1.26.2
+soundfile==0.12.1
+git+https://github.com/openai/whisper.git
+werkzeug==2.0.3
+py-cpuinfo==9.0.0
+demucs==4.0.1
+numba==0.59.1
+--index-url https://download.pytorch.org/whl/cpu
+--extra-index-url https://pypi.org/simple
+torch==2.2.0+cpu
+waitress==2.1.2
+pyinstaller==6.3.0
+click==7.1.2

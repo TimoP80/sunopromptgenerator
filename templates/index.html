@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Suno v5 Prompt Generator</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🤖 AI-Powered Suno Prompt Generator</h1>
+            <p class="author-info">by T. Pitkänen (timbor@saunagames.fi)</p>
+            <p>Upload any audio file to generate highly detailed prompts for Suno AI</p>
+
+            <div class="features-list">
+                <span class="feature-item">AI-Powered Analysis</span>
+                <span class="feature-item">GPU Accelerated</span>
+                <span class="feature-item">Vocal Separation (Demucs)</span>
+                <span class="feature-item">Lyrics Transcription (Whisper)</span>
+                <span class="feature-item">Customizable</span>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="status-indicator">
+                <div class="hardware-info">
+                    <span>🖥️ CPU: {{ cpu_model }}</span>
+                    <span>|</span>
+                    <span>🎮 GPU: {{ gpu_model }}</span>
+                </div>
+                <div class="acceleration-status">
+                    <div>
+                        AI Processing (Demucs & Whisper):
+                        {% if pytorch_gpu %}<span class="active">● GPU</span>{% else %}<span class="inactive">● CPU</span>{% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <div class="options-grid">
+                <div class="options-section">
+                    <label for="modelQualitySelect">Transcription Quality:</label>
+                    <select id="modelQualitySelect">
+                        <option value="tiny">Tiny (Fastest, Lower Accuracy)</option>
+                        <option value="base" selected>Base (Balanced)</option>
+                        <option value="medium">Medium (Slower, High Accuracy)</option>
+                    </select>
+                </div>
+                <div class="options-section">
+                    <label for="genreSelect">Genre for Analysis:</label>
+                    <select id="genreSelect">
+                        <!-- Genres will be populated dynamically -->
+                    </select>
+                    <button class="btn btn-secondary" id="addGenreBtn" style="margin-left: 10px;">Add Custom Genre</button>
+                    <button class="btn btn-secondary" id="clearBtn" style="margin-left: 10px; display: none;">Clear</button>
+                </div>
+            </div>
+
+            <div class="upload-area" id="uploadArea">
+                <div class="upload-icon">🎧</div>
+                <div class="upload-text">Drop your audio file here</div>
+                <div class="upload-subtext">or click to browse</div>
+                <div class="upload-subtext" style="margin-top: 10px;">Supported: MP3, WAV, FLAC, OGG, M4A, AAC</div>
+            </div>
+            <input type="file" id="fileInput" accept=".mp3,.wav,.flac,.ogg,.m4a,.aac">
+            
+            <div class="file-info" id="fileInfo"></div>
+            
+            <div class="loading" id="loading">
+                <div class="spinner"></div>
+                <p id="loadingStatus">Analyzing your audio... This may take a moment.</p>
+                <div class="progress-bar-container">
+                    <div class="progress-bar" id="progressBar"></div>
+                </div>
+            </div>
+
+            <div class="error" id="error"></div>
+
+            <div class="results" id="results">
+                <h2>📊 Audio Analysis</h2>
+                <div class="analysis-grid" id="analysisGrid"></div>
+
+                <div class="prompts-section">
+                    <h2>✨ Generated Prompts</h2>
+                    <div id="promptsContainer"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Modal for adding a new genre -->
+        <div id="genreModal" class="modal">
+            <div class="modal-content">
+                <span class="close-btn">&times;</span>
+                <h2>Add a New Genre Rule</h2>
+                <form id="genreForm">
+                    <div class="form-group">
+                        <label for="genreName">Genre Name:</label>
+                        <input type="text" id="genreName" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="minBPM">Minimum BPM:</label>
+                        <input type="number" id="minBPM" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="maxBPM">Maximum BPM:</label>
+                        <input type="number" id="maxBPM" required>
+                    </div>
+                    <button type="submit" class="btn">Save Genre</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='main.js') }}"></script>
+</body>
+</html>

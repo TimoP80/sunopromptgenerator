@@ -1,0 +1,4 @@
+include LICENSE
+include ffmpeg.exe
+include ffprobe.exe
+recursive-include pretrained_models *
