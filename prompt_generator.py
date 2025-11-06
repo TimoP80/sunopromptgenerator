@@ -98,11 +98,12 @@ class PromptGenerator:
         return base_prompt
     
     def _generate_structured_lyrics_template(self):
-        """Generates a detailed, structured lyrics template based on genre."""
-        
-        # Determine if key is likely major or minor for more descriptive tag
+        """
+        Generates a detailed, structured lyrics template based on genre,
+        inserting actual lyrics if available and supporting longer structures.
+        """
         key = self.features['key']
-        minor_keys = ['C#', 'D#', 'F#', 'G#', 'A#'] # Simplified
+        minor_keys = ['C#', 'D#', 'F#', 'G#', 'A#']
         key_mode = "Minor" if key in minor_keys else "Major"
 
         # --- 1. Metadata Block ---
@@ -117,7 +118,7 @@ class PromptGenerator:
             f"[Key: {key} {key_mode}]",
         ]
         if self.has_vocals:
-            vocal_style = "Ethereal" # Default style
+            vocal_style = "Ethereal"
             if self.vocal_gender:
                 metadata.append(f"[Vocal Style: {vocal_style} {self.vocal_gender} Lead]")
             else:
@@ -127,29 +128,36 @@ class PromptGenerator:
             metadata.append(f"[Instrumentation: {', '.join(self.instruments)}]")
         
         metadata.append("[Production: Wide Stereo, Clean Master]")
-        
-        # --- 2. Structure Block (Genre-dependent) ---
+
+        # --- 2. Structure Block (Genre-dependent and longer) ---
         is_electronic = "Trance" in self.genre or "EDM" in self.genre or "Hardcore" in self.genre or "Electronic" in self.genre
+        
+        # Use actual lyrics if available, otherwise use placeholders
+        lyrics_placeholder = "Your lyrics here..."
+        verse_1_lyrics = self.lyrics if self.lyrics else lyrics_placeholder
+        chorus_lyrics = "(Chorus lyrics from above)" if self.lyrics else lyrics_placeholder
         
         structure = []
         if is_electronic:
             metadata.append("[Structure: Extended DJ Mix]")
             structure = [
-                "\n[INTRO – 0:00–1:00]",
+                "\n[INTRO – 0:00–0:45]",
                 "[Instrumental Only]",
                 "Atmospheric pads and soft arpeggios. Rolling kick drum builds the groove.",
-                "\n[VERSE 1 – 1:00–2:00]" if self.has_vocals else "\n[BUILDUP – 1:00–2:00]",
-                self.lyrics if self.lyrics else ("Your lyrics here..." if self.has_vocals else "Main synth lead teases the melody. Filter sweeps and risers build tension."),
-                "\n[BREAKDOWN – 2:00–3:00]" if self.has_vocals else "",
+                "\n[BUILDUP 1 – 0:45–1:30]",
+                "Main synth lead teases the melody. Filter sweeps and risers build tension.",
+                "\n[VERSE 1 – 1:30–2:15]" if self.has_vocals else "",
+                verse_1_lyrics if self.has_vocals else "",
+                "\n[BREAKDOWN – 2:15–3:00]",
                 "Pads open up, melody emerges. Ethereal textures.",
-                "\n[BUILD – 3:00–3:30]",
+                "\n[BUILDUP 2 – 3:00–3:45]",
                 "Snare roll tension, risers, white noise swell.",
-                "\n[DROP / CHORUS – 3:30–4:30]",
-                "(Move chorus lyrics from above here)" if self.lyrics else ("Your chorus lyrics here..." if self.has_vocals else "(Big lead melody, full beat, hands-in-the-air moment)"),
-                "\n[MIDSECTION – 4:30–5:30]",
+                "\n[DROP / CHORUS – 3:45–4:30]",
+                chorus_lyrics if self.has_vocals else "(Big lead melody, full beat, hands-in-the-air moment)",
+                "\n[MIDSECTION – 4:30–5:15]",
                 "[Instrumental Only]",
                 "Main riff continues, evolving filter automation.",
-                "\n[OUTRO – 5:30–6:00]",
+                "\n[OUTRO – 5:15–6:00]",
                 "(Instrumental fade-out)",
                 "Pads and bassline slowly filter down."
             ]
@@ -159,19 +167,27 @@ class PromptGenerator:
                 "\n[INTRO]",
                 "[Instrumental]",
                 "\n[VERSE 1]",
-                "Your first verse lyrics here...",
+                verse_1_lyrics,
+                "\n[PRE-CHORUS]",
+                "Builds tension leading to the chorus...",
                 "\n[CHORUS]",
-                "Your chorus lyrics here...",
+                chorus_lyrics,
                 "\n[VERSE 2]",
                 "Your second verse lyrics here...",
                 "\n[CHORUS]",
-                "Your chorus lyrics here...",
+                chorus_lyrics,
                 "\n[BRIDGE]",
                 "A change of pace, different chords or melody...",
+                "\n[GUITAR SOLO]" if "guitar" in " ".join(self.instruments) else "",
+                "" if "guitar" not in " ".join(self.instruments) else "Melodic and emotional solo.",
+                "\n[CHORUS]",
+                chorus_lyrics,
                 "\n[OUTRO]",
                 "Fade out or a final impactful chord."
             ]
 
+        # Filter out empty lines from the structure
+        structure = [line for line in structure if line.strip()]
         return "\n".join(metadata) + "\n" + "\n".join(structure)
 
     def generate_advanced_mode(self):

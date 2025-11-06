@@ -76,7 +76,7 @@ class AudioAnalyzer:
         
     def load_audio(self):
         """Load audio file"""
-        self.y, self.sr = librosa.load(self.audio_path, sr=22050, duration=60)
+        self.y, self.sr = librosa.load(self.audio_path, sr=22050, duration=180)
         
     def analyze(self):
         """Perform complete audio analysis"""
@@ -95,21 +95,52 @@ class AudioAnalyzer:
         return self.features
     
     def get_tempo(self):
-        """Extract tempo (BPM)"""
-        # Use beat tracking which can be more robust for electronic music
-        # by providing a tighter start_bpm to guide the algorithm.
-        _, beat_frames = librosa.beat.beat_track(y=self.y, sr=self.sr, start_bpm=120, units='frames')
+        """Extract tempo (BPM) with enhanced accuracy."""
+        
+        # --- 1. Initial Estimate using Beat Tracking ---
+        # Use a broad start_bpm to guide the initial tracking
+        _, beat_frames = librosa.feature.beat_track(y=self.y, sr=self.sr, start_bpm=120, units='frames', tightness=100)
         beat_times = librosa.frames_to_time(beat_frames, sr=self.sr)
         
-        # If we have enough beats, calculate tempo from the median interval
+        initial_tempo = 0
         if len(beat_times) > 1:
-            tempo = 60.0 / np.median(np.diff(beat_times))
-            return round(tempo, 1)
-        
-        # Fallback to the original method if beat tracking fails
+            initial_tempo = 60.0 / np.median(np.diff(beat_times))
+
+        # --- 2. Multi-Resolution Onset-Based Tempo Analysis ---
         onset_env = librosa.onset.onset_strength(y=self.y, sr=self.sr)
-        tempo = librosa.beat.tempo(onset_envelope=onset_env, sr=self.sr)[0]
-        return round(tempo, 1)
+        
+        # Analyze with different hop lengths for robustness
+        hop_lengths = [256, 512, 1024]
+        tempo_estimates = []
+        for hop in hop_lengths:
+            onset_env_custom = librosa.onset.onset_strength(y=self.y, sr=self.sr, hop_length=hop)
+            tempo = librosa.feature.rhythm.tempo(onset_envelope=onset_env_custom, sr=self.sr, hop_length=hop)[0]
+            tempo_estimates.append(tempo)
+
+        # Add the initial beat-tracked tempo to the list of candidates
+        if initial_tempo > 0:
+            tempo_estimates.append(initial_tempo)
+
+        # --- 3. Post-Processing and Selection ---
+        # Find the median tempo, which is robust to outliers
+        median_tempo = np.median(tempo_estimates)
+
+        # Octave correction: Check if doubling or halving the median tempo
+        # brings it closer to one of the other estimates. This helps fix
+        # common "too slow" or "too fast" errors.
+        for i, est in enumerate(tempo_estimates):
+            if np.isclose(est, median_tempo * 2, atol=10):
+                # If an estimate is double the median, the median is likely the correct one
+                final_tempo = median_tempo
+                break
+            if np.isclose(est, median_tempo / 2, atol=10):
+                # If an estimate is half the median, it's likely the estimate is correct
+                final_tempo = est
+                break
+        else:
+            final_tempo = median_tempo
+
+        return round(final_tempo, 1)
     
     def get_key(self):
         """Estimate musical key"""

@@ -111,3 +111,7 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+# Ignore large executables
+ffmpeg.exe
+ffprobe.exe
