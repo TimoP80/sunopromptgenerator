@@ -11,6 +11,7 @@ import multiprocessing
 from audio_analyzer import AudioAnalyzer
 from prompt_generator import PromptGenerator
 from genre_rules import GENRE_RULES
+from suno_client import SunoClient
 import pprint
 
 app = Flask(__name__)
@@ -35,6 +36,26 @@ def allowed_file(filename):
     """Check if file extension is allowed"""
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in config.ALLOWED_EXTENSIONS
 
+HISTORY_FILE = os.path.join(os.path.dirname(__file__), 'analysis_history.json')
+
+def read_history():
+    """Reads the analysis history from the JSON file."""
+    if not os.path.exists(HISTORY_FILE):
+        return []
+    try:
+        with open(HISTORY_FILE, 'r') as f:
+            return json.load(f)
+    except (IOError, json.JSONDecodeError):
+        return []
+
+def write_history(data):
+    """Writes the analysis history to the JSON file."""
+    try:
+        with open(HISTORY_FILE, 'w') as f:
+            json.dump(data, f, indent=4)
+    except IOError:
+        logging.error("Could not write to history file.")
+
 def add_genre_rule_to_file(genre_name, min_bpm, max_bpm):
     """Adds a new genre rule to the GENRE_RULES list in genre_rules.py."""
     genre_rules_path = os.path.join(os.path.dirname(__file__), 'genre_rules.py')
@@ -54,7 +75,7 @@ def add_genre_rule_to_file(genre_name, min_bpm, max_bpm):
     with open(genre_rules_path, 'w') as f:
         f.write("GENRE_RULES = ")
         # Use pprint to format the output nicely
-        pprint.pprint(GENRE_RULES, f)
+        f.write(pprint.pformat(GENRE_RULES))
 
 
 
@@ -118,9 +139,15 @@ def analyze_audio():
                     yield f"data: {json.dumps({'status': 'Separating vocals (can be slow)...', 'progress': 40})}\n\n"
                     model_quality = request.form.get('model_quality', 'base')
                     demucs_model = request.form.get('demucs_model', 'htdemucs_ft')
+                    save_vocals = request.form.get('save_vocals') == 'true'
                     
                     yield f"data: {json.dumps({'status': f'Transcribing lyrics with Whisper ({model_quality})...', 'progress': 60})}\n\n"
-                    vocal_info = analyzer.extract_lyrics(model_quality=model_quality, demucs_model=demucs_model)
+                    vocal_info = analyzer.extract_lyrics(
+                        model_quality=model_quality,
+                        demucs_model=demucs_model,
+                        save_vocals=save_vocals,
+                        output_dir=app.config['UPLOAD_FOLDER']
+                    )
                     lyrics = vocal_info.get('lyrics')
                     vocal_gender = vocal_info.get('gender')
                 
@@ -159,6 +186,7 @@ def analyze_audio():
             logging.error(f"Error analyzing audio: {str(e)}")
             logging.error(traceback.format_exc())
             yield f"data: {json.dumps({'error': f'Error analyzing audio: {str(e)}'})}\n\n"
+            return
 
     return Response(stream_with_context(generate_progress()), content_type='text/event-stream')
 
@@ -256,6 +284,77 @@ def export_results():
         
     except Exception as e:
         logging.error(f"Error exporting results: {str(e)}")
+        return jsonify({'error': 'An internal error occurred.'}), 500
+
+@app.route('/api/generate-music', methods=['POST'])
+def generate_music():
+    """Triggers music generation using the Suno API."""
+    try:
+        data = request.get_json()
+        prompt = data.pop('prompt', None)
+        is_custom = data.pop('is_custom', False)
+        title = data.pop('title', 'AI Music')
+        instrumental = data.pop('instrumental', False)
+
+        if not prompt:
+            return jsonify({'error': 'Prompt is required.'}), 400
+
+        client = SunoClient()
+        # Pass the remaining data from the request to the client
+        response = client.generate_music(
+            prompt,
+            is_custom=is_custom,
+            title=title,
+            instrumental=instrumental,
+            **data
+        )
+        
+        return jsonify(response)
+        
+    except Exception as e:
+        logging.error(f"Error generating music: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/generation-status/<request_id>', methods=['GET'])
+def generation_status(request_id):
+    """Checks the status of a music generation request."""
+    try:
+        client = SunoClient()
+        response = client.generation_status(request_id)
+        return jsonify(response)
+        
+    except Exception as e:
+        logging.error(f"Error checking generation status: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/history', methods=['GET'])
+def get_history():
+    """Returns the analysis history."""
+    history = read_history()
+    return jsonify(history)
+
+@app.route('/api/history', methods=['POST'])
+def save_to_history():
+    """Saves an analysis result to the history."""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+        
+        history = read_history()
+        # Add a timestamp and a unique ID
+        import datetime
+        import uuid
+        data['id'] = str(uuid.uuid4())
+        data['timestamp'] = datetime.datetime.now().isoformat()
+        
+        history.insert(0, data) # Add to the beginning of the list
+        write_history(history)
+        
+        return jsonify({'success': True, 'message': 'Analysis saved to history.'})
+        
+    except Exception as e:
+        logging.error(f"Error saving to history: {str(e)}")
         return jsonify({'error': 'An internal error occurred.'}), 500
 
 if __name__ == '__main__':

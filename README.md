@@ -47,6 +47,7 @@ This project relies on several key Python libraries:
 -   **Demucs**: Meta AI's state-of-the-art music source separation model.
 -   **Whisper**: OpenAI's robust model for speech-to-text transcription.
 -   **Requests**: For communicating with the Suno API.
+-   **Suno API Client**: A complete, robust client for interacting with the Suno API.
 -   **PyTorch**: The underlying deep learning framework for `demucs` and `Whisper`.
 -   **Numpy**: For numerical operations on audio data.
 
@@ -119,6 +120,19 @@ The application's settings can be modified in the `config.py` file:
 -   `UPLOAD_FOLDER`: The directory where uploaded files are temporarily stored.
 -   `ALLOWED_EXTENSIONS`: The set of allowed audio file extensions.
 -   `MAX_FILE_SIZE`: The maximum allowed file size in bytes.
+
+### Suno API Client
+
+The `suno_client.py` file contains a complete and robust client for interacting with the Suno API. It includes the following features:
+
+-   **Automatic Retries**: The client will automatically retry failed requests with exponential backoff, making it more resilient to transient network issues and rate limiting.
+-   **Custom Exception Classes**: The client uses custom exception classes (`SunoAuthError`, `SunoRateLimitError`, `SunoServerError`) to provide more specific and informative error messages.
+-   **New API Endpoints**: The client now supports the following additional API endpoints:
+    -   `get_credits()`: Get the remaining credits for your API key.
+    -   `get_songs(ids=None)`: Get a list of all generated songs or specific songs by their IDs.
+    -   `get_song(song_id)`: Get detailed information for a single song.
+    -   `generate_lyrics(prompt)`: Generate lyrics from a prompt.
+    -   `extend_audio(audio_path, start_time)`: Upload and extend an existing audio file.
 
 ## Troubleshooting
 

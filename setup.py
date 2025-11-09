@@ -5,11 +5,11 @@ with open("README.md", "r", encoding="utf-8") as fh:
     long_description = fh.read()
 
 setup(
-    name='SunoPromptGenerator',
-    version='1.3.0',
+    name='AIMusicStudio',
+    version='1.5.0',
     author='T. Pitkänen',
     author_email='timbor@saunagames.fi',
-    description='An AI-driven tool that analyzes any audio file to generate detailed prompts for Suno AI.',
+    description='An AI-driven tool to analyze audio, generate detailed prompts, and create music with the Suno API.',
     long_description=long_description,
     long_description_content_type='text/markdown',
     url='https://github.com/TimborSaunagames/Suno-Prompt-Generator',
@@ -28,6 +28,7 @@ setup(
         'waitress==3.0.1',
         'click==8.1.7',
         'openai-whisper',
+        'requests',
         # torch is excluded, user must install it manually
     ],
     classifiers=[

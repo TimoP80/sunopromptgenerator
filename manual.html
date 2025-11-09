@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SunoPromptGenerator User Manual</title>
+    <style>
+    body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        line-height: 1.6;
+        color: #333;
+        background-color: #fdfdfd;
+        margin: 0;
+        padding: 0;
+    }
+    .container {
+        max-width: 800px;
+        margin: 20px auto;
+        padding: 20px;
+        background-color: #fff;
+        border-radius: 8px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    }
+    h1, h2, h3, h4 {
+        color: #222;
+        line-height: 1.2;
+        margin-top: 1.5em;
+        margin-bottom: 0.5em;
+        border-bottom: 1px solid #eee;
+        padding-bottom: 5px;
+    }
+    h1 {
+        font-size: 2.2em;
+    }
+    h2 {
+        font-size: 1.8em;
+    }
+    h3 {
+        font-size: 1.4em;
+    }
+    h4 {
+        font-size: 1.2em;
+        border-bottom: none;
+    }
+    p {
+        margin-bottom: 1em;
+    }
+    ul, ol {
+        padding-left: 20px;
+        margin-bottom: 1em;
+    }
+    li {
+        margin-bottom: 0.5em;
+    }
+    code {
+        font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, Courier, monospace;
+        background-color: #f0f0f0;
+        padding: 2px 5px;
+        border-radius: 4px;
+        font-size: 0.9em;
+    }
+    pre {
+        background-color: #f6f8fa;
+        padding: 16px;
+        border-radius: 6px;
+        overflow: auto;
+        font-size: 0.85em;
+        line-height: 1.45;
+    }
+    pre code {
+        background-color: transparent;
+        padding: 0;
+        border-radius: 0;
+    }
+    hr {
+        border: 0;
+        height: 1px;
+        background: #ddd;
+        margin: 2em 0;
+    }
+    @media (max-width: 600px) {
+        .container {
+            margin: 10px;
+            padding: 15px;
+        }
+        h1 {
+            font-size: 1.8em;
+        }
+        h2 {
+            font-size: 1.5em;
+        }
+    }
+</style>
+</head>
+<body>
+    <div class="container">
+        <h1>SunoPromptGenerator User Manual</h1>
+<hr>
+<h2>Chapter 1: Introduction</h2>
+<h3>1.1. What is the SunoPromptGenerator (AI Music Studio)?</h3>
+<p>Welcome to the SunoPromptGenerator, also known as the AI Music Studio. This advanced tool is designed to bridge the gap between your favorite audio tracks and the creative potential of AI-powered music generation. It acts as a musical analyst, listening to an audio file, understanding its core components, and translating them into detailed text prompts that you can use with the Suno music generation API.</p>
+<h3>1.2. Core Purpose & Key Concepts</h3>
+<p>The primary goal of the SunoPromptGenerator is to automate the complex process of describing a song's style, mood, and structure. Instead of manually trying to put the "vibe" of a song into words, this tool does the heavy lifting for you. It analyzes an audio file to extract its fundamental musical and lyrical characteristics, enabling you to create new, original music that is thematically and musically inspired by a reference track.</p>
+<h3>1.3. Who is this manual for?</h3>
+<p>This manual is for anyone interested in creating AI-generated music, especially those who want to guide the AI with the style of an existing song. It is written for a non-technical audience, so you don't need a background in music theory or software development to get started.</p>
+<hr>
+<h2>Chapter 2: Getting Started</h2>
+<h3>2.1. System Requirements</h3>
+<h4>2.1.1. Operating Systems</h4>
+<p>The application is compatible with most modern operating systems, including Windows, macOS, and Linux.</p>
+<h4>2.1.2. Hardware Acceleration (NVIDIA GPU Support)</h4>
+<p>For the best performance, an NVIDIA GPU is highly recommended. The application can leverage the GPU to significantly speed up demanding tasks like vocal separation and lyric transcription. If no compatible GPU is detected, the application will use the CPU, which will be noticeably slower.</p>
+<h3>2.2. Installation</h3>
+<h4>2.2.1. Installing the Application</h4>
+<p>Follow the installation instructions provided in the <code>README.md</code> file that came with the application. This typically involves running an installer or using a package manager.</p>
+<h4>2.2.2. Setting up the Suno API Key</h4>
+<p>To generate music directly from the application, you will need a Suno API key. Once you have your key, enter it into the settings or configuration section of the application.</p>
+<h3>2.3. A Quick Tour of the Interface</h3>
+<p>The SunoPromptGenerator offers two user-friendly interfaces:</p>
+<h4>2.3.1. The Web Interface (Flask)</h4>
+<p>Accessible through your web browser, this interface is perfect for users who prefer a modern, web-based experience.</p>
+<h4>2.3.2. The Desktop GUI (Tkinter)</h4>
+<p>A standalone desktop application that provides a classic, native window experience for offline use. Both interfaces offer the same core functionality.</p>
+<hr>
+<h2>Chapter 3: Your First Music Prompt (Quick Start Guide)</h2>
+<p>This guide will walk you through creating your first prompt in five simple steps.</p>
+<h3>3.1. Step 1: Selecting Your Audio File</h3>
+<p>Click the "Browse" or "Select File" button to open your computer's file browser. Choose an audio file you want to analyze (e.g., <code>.mp3</code>, <code>.wav</code>, <code>.flac</code>).</p>
+<h3>3.2. Step 2: Configuring Analysis Options (Basic)</h3>
+<p>For your first run, you can leave the default settings as they are. The application is pre-configured to provide a good balance of speed and quality.</p>
+<h3>3.3. Step 3: Running the Analysis</h3>
+<p>Click the "Analyze" button. You will see a progress bar and status updates as the application works through its steps, such as "Analyzing audio features...", "Separating vocals...", and "Generating prompts...".</p>
+<h3>3.4. Step 4: Understanding and Copying Your First Prompt</h3>
+<p>Once the analysis is complete, the results will appear. Go to the "Generated Prompts" tab. You will see several variations. The "Basic Prompt" is a great starting point. Click the "Copy" button next to it.</p>
+<h3>3.5. Step 5 (Optional): Generating Music with the Suno API</h3>
+<p>If you have entered your Suno API key, you can click the "Generate Music" button next to any prompt. The application will send the prompt to Suno and track the progress of your new song's creation.</p>
+<hr>
+<h2>Chapter 4: The User Interface in Detail</h2>
+<h3>4.1. The Main Window / Home Page</h3>
+<h4>4.1.1. File Selection Area</h4>
+<p>This is where you begin. It contains the button to select the audio file you wish to analyze.</p>
+<h4>4.1.2. Configuration Panel</h4>
+<p>Here, you can fine-tune the analysis process. You can force a specific genre, choose the quality of the AI models, and select other output options.</p>
+<h4>4.1.3. The "Analyze" Button</h4>
+<p>The main action button that starts the entire analysis pipeline.</p>
+<h4>4.1.4. Progress Bar and Status Updates</h4>
+<p>These elements provide real-time feedback during the analysis, so you know what's happening and how long it might take.</p>
+<h3>4.2. The Results View</h3>
+<p>After analysis, the results are organized into three tabs for clarity.</p>
+<h4>4.2.1. Generated Prompts Tab</h4>
+<p>This is the primary output. It contains all the different text prompts created from your audio file, ready to be copied or sent to the Suno API.</p>
+<h4>4.2.2. Analysis Data Tab</h4>
+<p>This tab provides a detailed breakdown of all the musical characteristics extracted from the file, such as tempo, key, mood, and detected instruments.</p>
+<h4>4.2.3. Log Tab</h4>
+<p>The log provides a step-by-step history of the analysis process, which can be useful for troubleshooting or understanding the workflow.</p>
+<hr>
+<h2>Chapter 5: Core Features Explained</h2>
+<h3>5.1. Comprehensive Audio Analysis</h3>
+<p>The application uses the powerful <code>librosa</code> library to perform a deep dive into the music's structure.</p>
+<ul>
+<li><strong>5.1.1. Tempo (BPM) Detection:</strong> Measures the speed of the music in Beats Per Minute.</li>
+<li><strong>5.1.2. Musical Key and Mode:</strong> Determines the track's key (e.g., C, G#, F) and mode (Major or minor).</li>
+<li><strong>5.1.3. Energy Classification:</strong> Analyzes the track's loudness (RMS value) to classify it as "low," "medium," or "high" energy.</li>
+<li><strong>5.1.4. Mood Inference:</strong> Combines tempo, key, and energy to infer the overall mood, such as "Energetic," "Melancholic," or "Calm."</li>
+<li><strong>5.1.5. Automatic Genre Classification:</strong> A smart, rule-based engine identifies the genre from a large library, with a special focus on electronic music.</li>
+</ul>
+<h3>5.2. Vocal and Lyric Processing</h3>
+<ul>
+<li><strong>5.2.1. How Vocal Separation Works (<code>demucs</code>):</strong> The application uses Meta's high-fidelity <code>demucs</code> model to cleanly separate the vocal track from the instruments.</li>
+<li><strong>5.2.2. Lyric Transcription with Whisper:</strong> The isolated vocal track is then transcribed into text using OpenAI's <code>Whisper</code> model.</li>
+<li><strong>5.2.3. Vocal Gender Detection:</strong> By analyzing the pitch of the separated vocals, the tool suggests whether the lead singer is "Male" or "Female."</li>
+</ul>
+<h3>5.3. Understanding the Generated Prompts</h3>
+<ul>
+<li><strong>5.3.1. Basic & Detailed Prompts:</strong> Simple, comma-separated lists of the core musical attributes.</li>
+<li><strong>5.3.2. Thematic & Artist-Style Prompts:</strong> More creative variations that might describe a scene (e.g., "a late-night drive") or emulate the style of a famous artist.</li>
+<li><strong>5.3.3. Advanced Mode Prompts (Custom Mode):</strong> A highly structured format for Suno's Custom Mode. It generates two parts: a <code>[Tag: Value]</code> style prompt for musical direction and a detailed lyrics template with structural markers like <code>[INTRO]</code>, <code>[VERSE]</code>, and <code>[CHORUS]</code>.</li>
+</ul>
+<hr>
+<h2>Chapter 6: Advanced Usage & Configuration</h2>
+<h3>6.1. Interacting with the Suno API</h3>
+<ul>
+<li><strong>6.1.1. Sending Prompts to the API:</strong> Click the "Generate Music" button next to any prompt to start the creation process.</li>
+<li><strong>6.1.2. Monitoring Generation Status:</strong> The interface will show the status of your generation jobs (e.g., "queued," "processing," "complete").</li>
+<li><strong>6.1.3. Accessing Your Generated Audio:</strong> Once complete, the application will display links to the final audio files for you to listen to and download.</li>
+</ul>
+<h3>6.2. Detailed Configuration Options</h3>
+<ul>
+<li><strong>6.2.1. Forcing a Specific Genre:</strong> If you disagree with the auto-detected genre or want to experiment, you can select a specific genre from the dropdown menu before analysis.</li>
+<li><strong>6.2.2. Choosing a Whisper Model:</strong> Select a model size (<code>tiny</code>, <code>base</code>, <code>medium</code>) to balance transcription speed and accuracy. Larger models are more accurate but slower.</li>
+<li><strong>6.2.3. Selecting a Vocal Separation Model:</strong> Choose the quality of the <code>demucs</code> model for vocal separation.</li>
+<li><strong>6.2.4. Saving the Isolated Vocal Track:</strong> Check this option to save the separated vocals as a separate <code>.wav</code> file, which is great for remixes or sampling.</li>
+</ul>
+<h3>6.3. Working with Inputs and Outputs</h3>
+<ul>
+<li><strong>6.3.1. Supported Input Audio Formats:</strong> The tool supports most common audio formats, including MP3, WAV, FLAC, and OGG.</li>
+<li><strong>6.3.2. Exporting Analysis Data (JSON):</strong> You can export the detailed analysis data as a JSON file for use in other applications or for your own records.</li>
+<li><strong>6.3.3. Managing Optional Outputs:</strong> The optional vocal <code>.wav</code> file will be saved in a designated output folder.</li>
+</ul>
+<hr>
+<h2>Chapter 7: Troubleshooting and FAQ</h2>
+<h3>7.1. Frequently Asked Questions (FAQ)</h3>
+<ul>
+<li><strong>"Why is the analysis so slow?"</strong></li>
+</ul>
+<p>Vocal separation and lyric transcription are very demanding tasks. Performance depends heavily on your computer's hardware. Using an NVIDIA GPU will result in a dramatic speed increase. If you don't have one, the process will take longer.</p>
+<ul>
+<li><strong>"Why was the genre detected incorrectly?"</strong></li>
+</ul>
+<p>Genre detection is complex and subjective. Our rule-based engine is very capable but may not always be perfect. If you find the genre is wrong, you can easily override it by selecting the correct one from the genre list before running the analysis.</p>
+<ul>
+<li><strong>"How can I improve lyric transcription accuracy?"</strong></li>
+</ul>
+<p>In the configuration panel, select a larger "Whisper Model" (e.g., <code>medium</code> or <code>large</code>). Larger models are significantly more accurate but require more processing time and computer memory.</p>
+<h3>7.2. Common Errors and Solutions</h3>
+<ul>
+<li><strong>7.2.1. Installation Issues:</strong> Ensure you have followed all steps in the <code>README.md</code> file and have installed all required dependencies.</li>
+<li><strong>7.2.2. API Connection Errors:</strong> Double-check that you have entered your Suno API key correctly and that you have a stable internet connection.</li>
+<li><strong>7.2.3. Errors during Audio Analysis:</strong> Some audio files may be corrupt or in an unsupported format. Try converting the file to a standard format like <code>.mp3</code> or <code>.wav</code> and try again.</li>
+</ul>
+<hr>
+<h2>Appendix</h2>
+<h3>A.1. Full List of Detectable Genres</h3>
+<p>The application includes a large, expandable library of genres with a particular focus on electronic music styles. Please refer to the genre selection dropdown in the application for a complete list.</p>
+<h3>A.2. Glossary of Musical Terms</h3>
+<ul>
+<li><strong>Tempo:</strong> The speed of a piece of music, measured in Beats Per Minute (BPM).</li>
+<li><strong>Key:</strong> The group of pitches, or scale, that forms the basis of a music composition.</li>
+<li><strong>RMS (Root Mean Square):</strong> A measure of the average power or loudness of an audio signal, used by the application to determine the track's "energy."</li>
+</ul>
+    </div>
+</body>
+</html>

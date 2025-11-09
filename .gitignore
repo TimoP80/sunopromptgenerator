@@ -115,3 +115,7 @@ dmypy.json
 # Ignore large executables
 ffmpeg.exe
 ffprobe.exe
+
+
+# Environment variables
+.env

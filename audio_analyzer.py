@@ -4,10 +4,28 @@ import soundfile as sf
 import random
 import whisper
 import os
+import sys
 import torch
 import importlib
 import genre_rules
 import mutagen
+import audioread
+
+# --- Set TORCH_HOME to use a local cache for pretrained models ---
+# This ensures that models are downloaded within the project directory
+# and can be bundled with the application. When running as a bundled app,
+# it points to the included models, preventing re-downloading.
+try:
+    # PyInstaller creates a temp folder and stores path in _MEIPASS
+    base_path = sys._MEIPASS
+except Exception:
+    base_path = os.path.dirname(os.path.abspath(__file__))
+
+torch_home_path = os.path.join(base_path, 'pretrained_models')
+os.environ['TORCH_HOME'] = torch_home_path
+# The hub directory will be created inside this path by torch.hub
+os.makedirs(os.path.join(torch_home_path, 'hub'), exist_ok=True)
+
 from demucs.apply import apply_model
 from demucs.pretrained import get_model
 from demucs.audio import AudioFile, convert_audio
@@ -86,7 +104,16 @@ class AudioAnalyzer:
 
     def load_audio(self):
         """Load audio file"""
-        self.y, self.sr = librosa.load(self.audio_path, sr=22050, mono=True)
+        try:
+            self.y, self.sr = librosa.load(self.audio_path, sr=22050, mono=True)
+        except audioread.exceptions.NoBackendError as e:
+            raise RuntimeError(
+                "Failed to load audio file because no audio backend was found. "
+                "Please install FFmpeg to process MP3, FLAC, and other compressed formats."
+            ) from e
+        except Exception as e:
+            # Catch other potential loading errors
+            raise RuntimeError(f"An unexpected error occurred while loading the audio: {e}") from e
 
     def extract_metadata(self):
         """Extracts all available metadata from the audio file."""
@@ -105,7 +132,14 @@ class AudioAnalyzer:
         try:
             audio = mutagen.File(self.audio_path, easy=True)
             if audio:
+                # Define a set of keys to exclude
+                exclude_keys = {
+                    'traktor4', 'replaygain_track_peak', 'replaygain_track_gain',
+                    'encodedby', 'media', 'comment'
+                }
                 for key, value in audio.items():
+                    if key.lower() in exclude_keys:
+                        continue
                     # Clean up key name for display
                     display_key = key.replace('_', ' ').title()
                     # Take the first element if it's a list
@@ -326,7 +360,7 @@ class AudioAnalyzer:
     def get_energy_value(self):
         """Return the raw numerical energy value."""
         rms = librosa.feature.rms(y=self.y)[0]
-        return np.mean(rms)
+        return float(np.mean(rms))
 
     def classify_mood(self):
         """Classify mood based on features"""
@@ -424,30 +458,38 @@ class AudioAnalyzer:
             print(f"Could not detect vocal gender: {e}")
             return None
 
-    def extract_lyrics(self, model_quality='base', demucs_model='htdemucs_ft', output_dir='temp_audio', cleanup=True):
+    def extract_lyrics(self, model_quality='base', demucs_model='htdemucs_ft', output_dir='temp_audio', save_vocals=False, cleanup=True):
         """
         Separates vocals from the audio and transcribes them using Whisper.
-        Returns a dictionary with lyrics and vocal gender.
+        Returns a dictionary with lyrics, vocal gender, and optionally the vocal file path.
         """
         if not self.detect_vocals():
-            return {'lyrics': None, 'gender': None}
+            return {'lyrics': None, 'gender': None, 'vocal_path': None}
 
         print("Vocal detection positive. Starting lyrics extraction...")
         vocal_path = None
+        final_vocal_path = None
         try:
             # --- 1. Separate vocals using Demucs ---
             separator = Separator(model_name=demucs_model, device=self.device)
             _, separated_tracks = separator.separate_audio_file(self.audio_path)
             
-            # Find the vocal track and save it
             vocal_track = separated_tracks.get('vocals')
             if vocal_track is not None:
-                os.makedirs(output_dir, exist_ok=True)
-                vocal_path = os.path.join(output_dir, "vocals.wav")
+                temp_output_dir = os.path.join(output_dir, 'temp')
+                os.makedirs(temp_output_dir, exist_ok=True)
+                vocal_path = os.path.join(temp_output_dir, "vocals.wav")
                 sf.write(vocal_path, vocal_track.T, separator.samplerate)
+
+                if save_vocals:
+                    base_filename = os.path.splitext(os.path.basename(self.audio_path))[0]
+                    final_vocal_path = os.path.join(output_dir, f"{base_filename}_vocals.wav")
+                    sf.write(final_vocal_path, vocal_track.T, separator.samplerate)
+                    print(f"Saved vocal track to: {final_vocal_path}")
+
             else:
                 print("Vocal separation failed, no vocal track found.")
-                return {'lyrics': None, 'gender': None}
+                return {'lyrics': None, 'gender': None, 'vocal_path': None}
 
             # --- 2. Transcribe vocals using Whisper ---
             model_key = f"whisper_{model_quality}"
@@ -462,12 +504,12 @@ class AudioAnalyzer:
             # --- 3. Detect vocal gender from the separated track ---
             gender = self._detect_vocal_gender(vocal_path)
 
-            return {'lyrics': lyrics, 'gender': gender}
+            return {'lyrics': lyrics, 'gender': gender, 'vocal_path': final_vocal_path}
         except Exception as e:
             print(f"An error occurred during lyrics extraction: {e}")
-            return {'lyrics': None, 'gender': None}
+            return {'lyrics': None, 'gender': None, 'vocal_path': None}
         finally:
-            # Clean up the separated audio files
+            # Clean up the temporary audio files
             if cleanup and vocal_path and os.path.exists(os.path.dirname(vocal_path)):
                 import shutil
                 shutil.rmtree(os.path.dirname(vocal_path))

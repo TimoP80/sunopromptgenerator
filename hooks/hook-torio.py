@@ -14,7 +14,7 @@ def hook(hook_api):
         torio_lib_path = os.path.join(os.path.dirname(torio.__file__), 'lib')
 
         if os.path.isdir(torio_lib_path):
-            logger.info(f"Manually collecting FFmpeg binaries from torio lib path: {torio_lib_path}")
+            logger.info(f"hook-torio.py: Manually collecting FFmpeg binaries from torio lib path: {torio_lib_path}")
             
             # Manually collect binaries because `search_dirs` is not supported in older PyInstaller versions.
             binaries = []
@@ -34,15 +34,15 @@ def hook(hook_api):
 
             if binaries:
                 hook_api.add_binaries(binaries)
-                logger.info(f"Found and added {len(binaries)} binaries from {torio_lib_path} to the bundle root.")
+                logger.info(f"hook-torio.py: Found and added {len(binaries)} binaries from {torio_lib_path} to the bundle root.")
             else:
-                logger.warn(f"No dynamic libraries found in {torio_lib_path} matching pattern '{file_pattern}'")
+                logger.warn(f"hook-torio.py: No dynamic libraries found in {torio_lib_path} matching pattern '{file_pattern}'")
 
         else:
-            logger.warn(f"torio lib path not found: {torio_lib_path}. FFmpeg DLLs might be missing.")
+            logger.warn(f"hook-torio.py: torio lib path not found: {torio_lib_path}. FFmpeg DLLs might be missing.")
 
         # Also collect any dynamic libs from the main package directory, just in case.
         hook_api.add_binaries(collect_dynamic_libs('torio'))
 
     except ImportError:
-        logger.warn("torio package not found. Cannot collect its binaries.")
+        logger.warn("hook-torio.py: torio package not found. Cannot collect its binaries.")

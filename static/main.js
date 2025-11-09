@@ -18,10 +18,17 @@ const metadataContainer = document.getElementById('metadataContainer');
 const metadataGrid = document.getElementById('metadataGrid');
 const proceedBtn = document.getElementById('proceedBtn');
 const exportBtn = document.getElementById('exportBtn');
+const themeToggle = document.getElementById('themeToggle');
+const historyBtn = document.getElementById('historyBtn');
+const historyPanel = document.getElementById('historyPanel');
+const closeHistoryBtn = document.getElementById('closeHistoryBtn');
+const historyContainer = document.getElementById('historyContainer');
+const saveHistoryBtn = document.getElementById('saveHistoryBtn');
 
 let currentFile = null;
 let currentFilepath = null;
 let currentAnalysisResult = null;
+let wavesurfer = null;
 
 // --- Genre Population ---
 async function populateGenres() {
@@ -82,6 +89,10 @@ clearBtn.addEventListener('click', () => {
     uploadArea.style.display = 'block';
     fileInfo.textContent = '';
     exportBtn.style.display = 'none';
+    if (wavesurfer) {
+        wavesurfer.destroy();
+    }
+    document.getElementById('waveform').innerHTML = '';
 });
 
 exportBtn.addEventListener('click', () => {
@@ -166,6 +177,22 @@ function handleFile(file) {
     
     uploadArea.style.display = 'none';
 
+    // Initialize WaveSurfer
+    if (wavesurfer) {
+        wavesurfer.destroy();
+    }
+    wavesurfer = WaveSurfer.create({
+        container: '#waveform',
+        waveColor: '#667eea',
+        progressColor: '#764ba2',
+        cursorWidth: 2,
+        barWidth: 3,
+        barRadius: 3,
+        responsive: true,
+        height: 100
+    });
+    wavesurfer.load(URL.createObjectURL(file));
+
     preprocessFile(file);
 }
 
@@ -231,6 +258,7 @@ async function uploadAndAnalyze(file) {
     formData.append('model_quality', modelQuality);
     formData.append('selected_genre', genreSelect.value);
     formData.append('demucs_model', document.getElementById('separationQualitySelect').value);
+    formData.append('save_vocals', document.getElementById('saveVocalsCheckbox').checked);
 
     try {
         const response = await fetch('/api/analyze', { // This is now a streaming endpoint
@@ -339,29 +367,38 @@ function displayResults(data) {
     results.classList.add('active');
     clearBtn.style.display = 'inline-block'; // Show clear button
     exportBtn.style.display = 'inline-block';
+    saveHistoryBtn.style.display = 'inline-block';
 }
 
 function createPromptCard(p, index) {
-    if (p.name === 'Advanced Mode') {
+    const isAdvanced = p.name === 'Advanced Mode';
+    const promptId = `prompt-text-${index}`;
+    const stylePromptId = `style-prompt-${index}`;
+    const lyricsPromptId = `lyrics-prompt-${index}`;
+
+    if (isAdvanced) {
         return `
             <div class="prompt-card">
                 <div class="prompt-header">
                     <span class="prompt-name">Advanced Prompt</span>
+                    <button class="generate-btn" onclick="generateMusic('${p.name}', {style: '${stylePromptId}', lyrics: '${lyricsPromptId}'})">Generate Music</button>
                 </div>
                 <div class="prompt-subsection">
                     <div class="prompt-header">
                         <span class="prompt-name-sub">Style of Music</span>
-                        <button class="copy-btn" onclick="copyPrompt('style-prompt-${index}', this)">Copy Style</button>
+                        <button class="copy-btn" onclick="copyPrompt('${stylePromptId}', this)">Copy Style</button>
                     </div>
-                    <div class="prompt-text" id="style-prompt-${index}">${escapeTemplateLiteral(p.prompt.style_prompt || '')}</div>
+                    <div class="prompt-text">
+                        <textarea id="${stylePromptId}">${escapeTemplateLiteral(p.prompt.style_prompt || '')}</textarea>
+                    </div>
                 </div>
                 <div class="prompt-subsection">
                     <div class="prompt-header">
                         <span class="prompt-name-sub">Lyrics Template</span>
-                        <button class="copy-btn" onclick="copyPrompt('lyrics-prompt-${index}', this)">Copy Lyrics</button>
+                        <button class="copy-btn" onclick="copyPrompt('${lyricsPromptId}', this)">Copy Lyrics</button>
                     </div>
                     <div class="prompt-text">
-                        <textarea id="lyrics-prompt-${index}" readonly>${escapeTemplateLiteral(p.prompt.lyrics_prompt)}</textarea>
+                        <textarea id="${lyricsPromptId}">${escapeTemplateLiteral(p.prompt.lyrics_prompt)}</textarea>
                     </div>
                 </div>
             </div>`;
@@ -370,9 +407,14 @@ function createPromptCard(p, index) {
             <div class="prompt-card">
                 <div class="prompt-header">
                     <span class="prompt-name">${p.name}</span>
-                    <button class="copy-btn" onclick="copyPrompt('prompt-text-${index}', this)">Copy</button>
+                    <div>
+                        <button class="copy-btn" onclick="copyPrompt('${promptId}', this)">Copy</button>
+                        <button class="generate-btn" onclick="generateMusic('${p.name}', '${promptId}')">Generate Music</button>
+                    </div>
                 </div>
-                <div class="prompt-text" id="prompt-text-${index}">${escapeTemplateLiteral(p.prompt || '')}</div>
+                <div class="prompt-text">
+                    <textarea id="${promptId}">${escapeTemplateLiteral(p.prompt || '')}</textarea>
+                </div>
             </div>`;
     }
 }
@@ -395,5 +437,272 @@ function showError(message) {
     error.classList.add('active');
 }
 
+async function generateMusic(promptName, ids) {
+    let promptPayload;
+    const isCustom = promptName === 'Advanced Mode';
+
+    if (isCustom) {
+        const stylePrompt = document.getElementById(ids.style).value;
+        const lyricsPrompt = document.getElementById(ids.lyrics).value;
+        promptPayload = {
+            style_prompt: stylePrompt,
+            lyrics_prompt: lyricsPrompt
+        };
+    } else {
+        promptPayload = document.getElementById(ids).value;
+    }
+
+    // Switch to the generations tab
+    openTab({ currentTarget: document.querySelector('.tab-link[onclick*="sunoGenerations"]') }, 'sunoGenerations');
+    
+    const generationsContainer = document.getElementById('generationsContainer');
+    const generationCard = document.createElement('div');
+    generationCard.className = 'generation-card';
+    generationCard.innerHTML = `
+        <div class="generation-header">
+            <span class="generation-name">Generating: ${promptName}</span>
+            <div class="spinner"></div>
+        </div>
+        <div class="generation-status">Status: Queued</div>
+    `;
+    generationsContainer.appendChild(generationCard);
+
+    try {
+        const response = await fetch('/api/generate-music', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                prompt: promptPayload,
+                is_custom: isCustom,
+                prompt_name: promptName
+            })
+        });
+        const data = await response.json();
+
+        if (data.error) {
+            throw new Error(data.error);
+        }
+
+        pollGenerationStatus(data.request_id, generationCard);
+
+    } catch (err) {
+        const statusElement = generationCard.querySelector('.generation-status');
+        statusElement.textContent = `Error: ${err.message}`;
+        statusElement.classList.add('generation-error');
+        generationCard.querySelector('.spinner').style.display = 'none';
+    }
+}
+
+async function pollGenerationStatus(requestId, cardElement) {
+    const statusElement = cardElement.querySelector('.generation-status');
+    const spinnerElement = cardElement.querySelector('.spinner');
+
+    try {
+        const response = await fetch(`/api/generation-status/${requestId}`);
+        const data = await response.json();
+
+        if (data.error) {
+            throw new Error(data.error);
+        }
+
+        statusElement.textContent = `Status: ${data.status}`;
+
+        if (data.status === 'completed' && data.results) {
+            spinnerElement.style.display = 'none';
+            displayGeneratedAudio(data.results, cardElement);
+        } else if (data.status === 'failed') {
+            spinnerElement.style.display = 'none';
+            throw new Error(data.message || 'Generation failed.');
+        } else {
+            setTimeout(() => pollGenerationStatus(requestId, cardElement), 5000); // Poll every 5 seconds
+        }
+
+    } catch (err) {
+        statusElement.textContent = `Error: ${err.message}`;
+        statusElement.classList.add('generation-error');
+        spinnerElement.style.display = 'none';
+    }
+}
+
+function displayGeneratedAudio(results, cardElement) {
+    const audioContainer = document.createElement('div');
+    audioContainer.className = 'audio-container';
+    results.forEach(result => {
+        const audio = new Audio(result.audio_url);
+        audio.controls = true;
+        audioContainer.appendChild(audio);
+    });
+    cardElement.appendChild(audioContainer);
+}
+
+function openQuickGenTab(evt, tabName) {
+    const tabContents = document.getElementsByClassName("quick-generation-tab-content");
+    for (let i = 0; i < tabContents.length; i++) {
+        tabContents[i].classList.remove("active");
+    }
+    const tabLinks = document.querySelectorAll(".quick-generation-tabs .tab-link");
+    for (let i = 0; i < tabLinks.length; i++) {
+        tabLinks[i].classList.remove("active");
+    }
+    document.getElementById(tabName).classList.add("active");
+    evt.currentTarget.classList.add("active");
+}
+
+async function handleQuickGenerate() {
+    const simplePrompt = document.getElementById('quickGenSimplePrompt').value;
+    const advancedStyle = document.getElementById('quickGenAdvancedStyle').value;
+    const advancedLyrics = document.getElementById('quickGenAdvancedLyrics').value;
+    const title = document.getElementById('quickGenTitle').value;
+    const instrumental = document.getElementById('quickGenInstrumental').checked;
+
+    const activeTab = document.querySelector('.quick-generation-tab-content.active').id;
+    
+    let requestBody;
+    let promptName;
+
+    if (activeTab === 'quickGenSimple') {
+        if (!simplePrompt.trim()) {
+            alert('Please enter a prompt.');
+            return;
+        }
+        requestBody = {
+            prompt: simplePrompt,
+            is_custom: false,
+            title: title || 'AI Music (Simple)',
+            instrumental: instrumental
+        };
+        promptName = "Quick Gen (Simple)";
+    } else {
+        if (!advancedStyle.trim() && !advancedLyrics.trim()) {
+            alert('Please enter a style or lyrics for advanced generation.');
+            return;
+        }
+        requestBody = {
+            prompt: {
+                style_prompt: advancedStyle,
+                lyrics_prompt: advancedLyrics
+            },
+            is_custom: true,
+            title: title || 'AI Music (Advanced)',
+            instrumental: instrumental
+        };
+        promptName = "Quick Gen (Advanced)";
+    }
+
+    // Reuse the existing generateMusic function's logic but adapted for this new flow
+    openTab({ currentTarget: document.querySelector('.tab-link[onclick*="sunoGenerations"]') }, 'sunoGenerations');
+    
+    const generationsContainer = document.getElementById('generationsContainer');
+    const generationCard = document.createElement('div');
+    generationCard.className = 'generation-card';
+    generationCard.innerHTML = `
+        <div class="generation-header">
+            <span class="generation-name">Generating: ${promptName}</span>
+            <div class="spinner"></div>
+        </div>
+        <div class="generation-status">Status: Queued</div>
+    `;
+    generationsContainer.appendChild(generationCard);
+
+    try {
+        const response = await fetch('/api/generate-music', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(requestBody)
+        });
+        const data = await response.json();
+
+        if (data.error) {
+            throw new Error(data.error);
+        }
+
+        pollGenerationStatus(data.request_id, generationCard);
+
+    } catch (err) {
+        const statusElement = generationCard.querySelector('.generation-status');
+        statusElement.textContent = `Error: ${err.message}`;
+        statusElement.classList.add('generation-error');
+        generationCard.querySelector('.spinner').style.display = 'none';
+    }
+}
+
+
 // Initial population of genres
-document.addEventListener('DOMContentLoaded', populateGenres);
+document.addEventListener('DOMContentLoaded', () => {
+    document.getElementById('quickGenerateBtn').addEventListener('click', handleQuickGenerate);
+    populateGenres();
+
+    // --- Theme Switcher Logic ---
+    const currentTheme = localStorage.getItem('theme');
+    if (currentTheme === 'dark') {
+        document.body.classList.add('dark-mode');
+        themeToggle.checked = true;
+    }
+
+    themeToggle.addEventListener('change', () => {
+        if (themeToggle.checked) {
+            document.body.classList.add('dark-mode');
+            localStorage.setItem('theme', 'dark');
+        } else {
+            document.body.classList.remove('dark-mode');
+            localStorage.setItem('theme', 'light');
+        }
+    });
+
+    // --- History Panel Logic ---
+    historyBtn.addEventListener('click', () => {
+        historyPanel.classList.add('open');
+        loadHistory();
+    });
+
+    closeHistoryBtn.addEventListener('click', () => {
+        historyPanel.classList.remove('open');
+    });
+
+    saveHistoryBtn.addEventListener('click', async () => {
+        if (currentAnalysisResult) {
+            try {
+                const response = await fetch('/api/history', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(currentAnalysisResult)
+                });
+                const result = await response.json();
+                if (result.success) {
+                    alert('Analysis saved to history!');
+                } else {
+                    throw new Error(result.error);
+                }
+            } catch (err) {
+                alert(`Error saving to history: ${err.message}`);
+            }
+        }
+    });
+
+    async function loadHistory() {
+        try {
+            const response = await fetch('/api/history');
+            const history = await response.json();
+            historyContainer.innerHTML = history.map(item => `
+                <div class="history-item" data-id="${item.id}">
+                    <div class="history-item-date">${new Date(item.timestamp).toLocaleString()}</div>
+                    <div class="history-item-genre">${item.analysis.genre}</div>
+                </div>
+            `).join('');
+
+            // Add event listeners to history items
+            document.querySelectorAll('.history-item').forEach(item => {
+                item.addEventListener('click', () => {
+                    const selected = history.find(h => h.id === item.dataset.id);
+                    if (selected) {
+                        displayResults(selected);
+                        historyPanel.classList.remove('open');
+                    }
+                });
+            });
+
+        } catch (err) {
+            historyContainer.innerHTML = '<p>Could not load history.</p>';
+        }
+    }
+});

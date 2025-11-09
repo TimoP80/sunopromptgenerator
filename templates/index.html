@@ -3,23 +3,73 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Suno v5 Prompt Generator</title>
+    <title>AI Music Studio</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
     <div class="container">
         <div class="header">
-            <h1>🤖 AI-Powered Suno Prompt Generator</h1>
+            <div class="header-controls">
+                <button class="btn btn-icon" id="historyBtn" title="Analysis History">📜</button>
+                <div class="theme-switcher-container">
+                    <label class="theme-switcher">
+                        <input type="checkbox" id="themeToggle">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+            </div>
+            <h1>🎶 AI Music Studio 🎶</h1>
             <p class="author-info">by T. Pitkänen (timbor@saunagames.fi)</p>
-            <p>Upload any audio file to generate highly detailed prompts for Suno AI</p>
+            <p>Analyze Audio, Generate Prompts, and Create Music with AI</p>
 
             <div class="features-list">
-                <span class="feature-item">AI-Powered Analysis</span>
-                <span class="feature-item">GPU Accelerated</span>
-                <span class="feature-item">Vocal Separation (Demucs)</span>
-                <span class="feature-item">Lyrics Transcription (Whisper)</span>
-                <span class="feature-item">Customizable</span>
+                <span class="feature-item">✨ AI Music Generation</span>
+                <span class="feature-item">🎧 Audio Analysis</span>
+                <span class="feature-item">🚀 GPU Accelerated</span>
+                <span class="feature-item">🎤 Vocal Separation</span>
+                <span class="feature-item">✍️ Lyrics Transcription</span>
             </div>
+        </div>
+
+        <div class="card">
+            <h2>⚡ Quick Generation</h2>
+            <p>Bypass audio analysis and generate music directly from a prompt.</p>
+            <div class="quick-generation-tabs">
+                <button class="tab-link active" onclick="openQuickGenTab(event, 'quickGenSimple')">Simple</button>
+                <button class="tab-link" onclick="openQuickGenTab(event, 'quickGenAdvanced')">Advanced</button>
+            </div>
+
+            <div id="quickGenSimple" class="quick-generation-tab-content active">
+                <textarea id="quickGenSimplePrompt" placeholder="e.g., A chill lofi hip hop beat, with a melancholic piano melody..."></textarea>
+            </div>
+
+            <div id="quickGenAdvanced" class="quick-generation-tab-content">
+                <div class="form-group">
+                    <label for="quickGenTitle">Title:</label>
+                    <input type="text" id="quickGenTitle" placeholder="e.g., Midnight Rain">
+                </div>
+                 <div class="prompt-subsection">
+                    <div class="prompt-header">
+                        <span class="prompt-name-sub">Style of Music</span>
+                    </div>
+                    <div class="prompt-text">
+                        <textarea id="quickGenAdvancedStyle" placeholder="e.g., lofi hip hop, chill, instrumental"></textarea>
+                    </div>
+                </div>
+                <div class="prompt-subsection">
+                    <div class="prompt-header">
+                        <span class="prompt-name-sub">Lyrics</span>
+                    </div>
+                    <div class="prompt-text">
+                        <textarea id="quickGenAdvancedLyrics" placeholder="[verse]&#x0a;the rain falls softly&#x0a;[chorus]&#x0a;on the window pane"></textarea>
+                    </div>
+                </div>
+                <div class="options-section" style="margin-top: 15px;">
+                    <input type="checkbox" id="quickGenInstrumental">
+                    <label for="quickGenInstrumental">Instrumental</label>
+                </div>
+            </div>
+            <button class="btn" id="quickGenerateBtn" style="margin-top: 15px;">Generate Music</button>
         </div>
 
         <div class="card">
@@ -61,6 +111,10 @@
                     </select>
                 </div>
                 <div class="options-section">
+                    <input type="checkbox" id="saveVocalsCheckbox">
+                    <label for="saveVocalsCheckbox">Save Extracted Vocals</label>
+                </div>
+                <div class="options-section">
                     <label for="genreSelect">Genre for Analysis:</label>
                     <select id="genreSelect">
                         <!-- Genres will be populated dynamically -->
@@ -68,6 +122,7 @@
                     <button class="btn btn-secondary" id="addGenreBtn" style="margin-left: 10px;">Add Custom Genre</button>
                     <button class="btn btn-secondary" id="clearBtn" style="margin-left: 10px; display: none;">Clear</button>
                     <button class="btn btn-secondary" id="exportBtn" style="margin-left: 10px; display: none;">Export to JSON</button>
+                    <button class="btn btn-secondary" id="saveHistoryBtn" style="margin-left: 10px; display: none;">Save to History</button>
                 </div>
             </div>
 
@@ -80,6 +135,7 @@
             <input type="file" id="fileInput" accept=".mp3,.wav,.flac,.ogg,.m4a,.aac">
             
             <div class="file-info" id="fileInfo"></div>
+            <div id="waveform"></div>
 
             <div class="metadata-container" id="metadataContainer">
                 <h2>Quick Info</h2>
@@ -98,7 +154,9 @@
             <div class="error" id="error"></div>
 
             <div class="results" id="results">
-                <h2>📊 Audio Analysis</h2>
+                <div class="results-header">
+                    <h2>📊 Audio Analysis</h2>
+                </div>
                 <div class="analysis-grid" id="analysisGrid"></div>
 
                 <div class="prompts-section">
@@ -107,6 +165,7 @@
                         <button class="tab-link active" onclick="openTab(event, 'standardPrompts')">Standard</button>
                         <button class="tab-link" onclick="openTab(event, 'creativePrompts')">Creative</button>
                         <button class="tab-link" onclick="openTab(event, 'advancedPrompts')">Advanced</button>
+                        <button class="tab-link" onclick="openTab(event, 'sunoGenerations')">Music Generations</button>
                     </div>
 
                     <div id="standardPrompts" class="tab-content active">
@@ -117,6 +176,10 @@
                     </div>
                     <div id="advancedPrompts" class="tab-content">
                         <!-- Advanced Mode -->
+                    </div>
+                    <div id="sunoGenerations" class="tab-content">
+                        <h2>🎶 Suno Generations</h2>
+                        <div id="generationsContainer"></div>
                     </div>
                 </div>
             </div>
@@ -146,6 +209,16 @@
         </div>
     </div>
 
+    <!-- History Panel -->
+    <div id="historyPanel" class="history-panel">
+        <button class="close-btn" id="closeHistoryBtn">&times;</button>
+        <h2>Analysis History</h2>
+        <div id="historyContainer">
+            <!-- History items will be populated here -->
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/wavesurfer.js"></script>
     <script src="{{ url_for('static', filename='main.js') }}"></script>
 </body>
 </html>
