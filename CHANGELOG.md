@@ -1,31 +1,40 @@
 # Changelog
 
-## [1.3.0] - 2025-11-09
+## [1.4.0] - 2025-11-09
 
 ### Major Features
 
-- **Native Windows GUI:** The application has been completely redesigned from a web-based interface to a native Windows GUI using `tkinter`. This removes the need for a web browser and provides a more integrated desktop experience. The new GUI is the default build and is launched via `gui.py`.
-- **Updated Build Process:** The build system has been reconfigured to support the new GUI application. This includes new PyInstaller `.spec` files (`SunoPromptGenerator_gui.spec` and `SunoPromptGenerator_gui_noupx.spec`) and an updated `gui_builder.py` to create a standalone executable from the new GUI.
-- **Web GUI Redesign:** Redesigned the web interface with a tabbed layout to better organize the generated prompts into "Standard," "Creative," and "Advanced" categories, improving usability and providing a cleaner user experience.
-- **Metadata Display:** Added a "Quick Info" section to both the web and desktop GUIs. This feature provides immediate, lightweight analysis results—including tempo, key, and energy—upon file selection, offering users instant feedback before running the full analysis.
-- **Enhanced Lyrics Template:** The advanced mode's lyrics template has been significantly improved. It now generates more creative and context-aware suggestions based on the song's mood, genre, and energy, providing a more inspiring starting point for lyric writing.
-- **Creative Enhancements:** Overhauled the instrument detection and prompt generation logic to create more diverse, context-aware, and high-quality prompts. This includes a new genre-based instrument mapping system and more dynamic prompt construction.
-- **Prompt Variety:** Improved the variety of generated prompts by expanding the descriptor maps with more creative and genre-appropriate terms, and by making the thematic prompts more dynamic and interesting.
-- **Performance Optimization:** Added a "Separation Quality" option to both the web and desktop GUIs, allowing users to choose a faster Demucs model for quicker analysis.
-- **Tempo Descriptor Granularity:** The `tempo_map` has been expanded with more sections to provide more granular and varied tempo descriptions in the generated prompts.
-- **Advanced Key Detection:** Implemented a more advanced key-finding algorithm that uses key profile correlation to accurately determine both the key and its mode (major or minor), improving the accuracy of the analysis.
-- **Advanced Refinement Prompt:** Overhauled the "Refinement Prompt" to be a more powerful, data-driven feedback loop. It now generates a highly prescriptive, multi-line prompt with exact numerical data, dynamic bar length, and suggested purpose, allowing for precise control over iterative generations.
-- **Detailed Analysis Data:** Expanded the JSON analysis data to include more detailed metrics like `spectral_contrast`, `spectral_bandwidth`, `tonnetz`, and the raw numerical `energy_value`, providing more comprehensive insights.
-- **CUDA Performance & Stability:** Implemented several optimizations for CUDA processing, including mixed-precision inference for Demucs and GPU memory management to prevent memory creep, resulting in a faster and more stable analysis process.
-- **Dependency Update:** Updated the deprecated `torch.cuda.amp.autocast` call to the new `torch.amp.autocast` syntax to ensure compatibility with future PyTorch versions.
-- **Expanded Whisper Models:** The list of available Whisper models has been expanded to include `small`, `large`, and the English-only variants (`.en`). This provides users with more granular control over transcription speed and quality.
-- **Genre Enhancement:** Expanded the genre-specific instrumentation and style tags for Gabberdisco, Hardcore, Hard Techno, House, and Frenchcore to generate more detailed and authentic prompts.
-- **Improved Progress Feedback:** Added more granular status updates to the analysis process in both the web and desktop applications, providing clearer feedback on the application's progress.
-- **Startup Messages:** Added console status messages to the web application startup process to provide better feedback when running from the command line.
-- **Web App GPU Acceleration:** The web application now correctly detects and utilizes the available GPU for AI processing tasks, ensuring that Whisper transcriptions are properly hardware-accelerated.
-- **Tempo Analysis:** Implemented a fallback mechanism in the tempo analysis to ensure a valid BPM is always returned, improving the reliability of the prompt generation.
+- **Application Overhaul:**
+  - **Native GUI:** Replaced the web interface with a native `tkinter` GUI for a more integrated desktop experience.
+  - **Suno API Integration:** Added the ability to generate music directly from prompts using the Suno API.
+  - **Rebranding:** Renamed the application to "AI Music Studio" to reflect its new capabilities.
+
+- **Build System:**
+  - **Flexible Builds:** Introduced separate build scripts (`build_gui.bat`, `build_cli.bat`) with options to toggle UPX compression.
+  - **Self-Contained:** The build process now automatically bundles pretrained models, making the application fully offline-capable.
+  - **Streamlined:** Removed redundant `.spec` files and updated the GUI builder for a cleaner, more maintainable project.
+
+- **Prompt Generation & Analysis:**
+  - **Creative Engine:** Overhauled the prompt generation logic with a new genre-based instrument mapping system, expanded descriptor maps, and more dynamic thematic prompts.
+  - **Advanced Analysis:** Implemented a more accurate key-finding algorithm, expanded tempo descriptors, and included more detailed metrics in the analysis output.
+  - **Powerful Refinement:** The "Refinement Prompt" is now a data-driven feedback loop, generating prescriptive prompts with exact numerical data for precise iterative control.
+  - **Enhanced Lyrics:** The lyrics template now generates more creative and context-aware suggestions.
+
+- **User Experience & Performance:**
+  - **UI Redesign:** The web interface now features a tabbed layout, and both GUIs include a "Quick Info" section for instant metadata display.
+  - **Vocal Separation:** Added an option to save isolated vocal tracks.
+  - **Performance Options:** Users can now select a faster Demucs model for quicker analysis.
+  - **GPU & CUDA:** Optimized CUDA processing with mixed-precision inference and memory management for a faster, more stable experience.
+  - **Expanded Models:** Added more Whisper model options for greater control over transcription speed and quality.
+### Bug Fixes
+
+- **CLI Arguments:** Resolved an issue where the command-line interface would not correctly parse arguments with spaces.
 - **Analysis Display:** Fixed a bug where the analysis results (Tempo, Key, Energy) were not displaying correctly in the web UI. The backend JSON response has been restructured to ensure the data is properly parsed and displayed.
-- **Bug Fix:** Resolved a `NameError` in the `detect_instruments` method caused by a missing `import random` statement, ensuring the analysis process completes successfully.
+- **Instrument Detection:** Resolved a `NameError` in the `detect_instruments` method caused by a missing `import random` statement, ensuring the analysis process completes successfully.
+- **JSON Serialization:** Fixed a `TypeError` in the JSON serialization of analysis data by ensuring all NumPy `float32` values are converted to standard Python floats.
+- **GUI:** Restored the "Generate Music" buttons to the web GUI, which were inadvertently removed during a redesign.
+- **Build:** Updated the build scripts to use the new application name ("AIMusicStudio"), ensuring the executable is correctly named.
+- **Dependencies:** Added `tensorboard` to the project's dependencies to resolve a `ModuleNotFoundError` that was causing the build to fail.
 
 ## [1.1.0] - 2025-11-07
 
