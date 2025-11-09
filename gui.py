@@ -124,6 +124,12 @@ class PromptGeneratorGUI:
         ]
         self.model_quality_menu = ttk.Combobox(options_frame, textvariable=self.model_quality_var, values=models, state="readonly")
         self.model_quality_menu.grid(row=1, column=1, padx=5, pady=5, sticky="ew")
+
+        ttk.Label(options_frame, text="Separation Quality:").grid(row=2, column=0, padx=5, pady=5, sticky="w")
+        self.demucs_model_var = tk.StringVar(value='htdemucs_ft')
+        demucs_models = ['htdemucs_ft', 'hdemucs_mmi', 'mdx_extra']
+        self.demucs_model_menu = ttk.Combobox(options_frame, textvariable=self.demucs_model_var, values=demucs_models, state="readonly")
+        self.demucs_model_menu.grid(row=2, column=1, padx=5, pady=5, sticky="ew")
         
         options_frame.columnconfigure(1, weight=1)
 
@@ -201,20 +207,27 @@ class PromptGeneratorGUI:
             analyzer = AudioAnalyzer(self.filepath, device=self.device, model_cache=self.model_cache)
             features = analyzer.analyze()
             
-            self.update_progress(20, "Classifying genre and mood...")
+            self.update_progress(20, "Detecting tempo and key...")
             selected_genre = self.genre_var.get()
             if selected_genre == "Auto-detect":
                 selected_genre = None
+            
+            self.update_progress(25, "Classifying genre and mood...")
             genre = analyzer.classify_genre(selected_genre=selected_genre)
             mood = analyzer.classify_mood()
-            instruments = analyzer.detect_instruments()
+            
+            self.update_progress(30, "Analyzing instruments...")
+            instruments = analyzer.detect_instruments(genre)
             has_vocals = analyzer.detect_vocals()
             
             lyrics, vocal_gender = None, None
             if has_vocals:
-                self.update_progress(40, "Separating vocals and transcribing lyrics (this can be slow)...")
+                self.update_progress(40, "Separating vocals (can be slow)...")
                 model_quality = self.model_quality_var.get()
-                vocal_info = analyzer.extract_lyrics(model_quality=model_quality)
+                demucs_model = self.demucs_model_var.get()
+                
+                self.update_progress(60, f"Transcribing lyrics with Whisper ({model_quality})...")
+                vocal_info = analyzer.extract_lyrics(model_quality=model_quality, demucs_model=demucs_model)
                 lyrics = vocal_info.get('lyrics')
                 vocal_gender = vocal_info.get('gender')
             
@@ -234,6 +247,8 @@ class PromptGeneratorGUI:
             self.log(f"\nERROR: An unexpected error occurred: {e}")
             self.update_progress(0, "Error")
         finally:
+            if self.device == 'cuda':
+                torch.cuda.empty_cache()
             self.master.after(0, self.enable_button)
 
     def update_progress(self, value, log_message=None):

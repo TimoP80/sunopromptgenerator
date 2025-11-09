@@ -102,18 +102,25 @@ def analyze_audio():
                 analyzer = AudioAnalyzer(filepath, device=DEVICE, model_cache=MODEL_CACHE)
                 features = analyzer.analyze()
                 
-                yield f"data: {json.dumps({'status': 'Classifying genre and mood...', 'progress': 25})}\n\n"
+                yield f"data: {json.dumps({'status': 'Detecting tempo and key...', 'progress': 25})}\n\n"
                 selected_genre = request.form.get('selected_genre', None)
+                
+                yield f"data: {json.dumps({'status': 'Classifying genre and mood...', 'progress': 30})}\n\n"
                 genre = analyzer.classify_genre(selected_genre=selected_genre)
                 mood = analyzer.classify_mood()
-                instruments = analyzer.detect_instruments()
+                
+                yield f"data: {json.dumps({'status': 'Analyzing instruments...', 'progress': 35})}\n\n"
+                instruments = analyzer.detect_instruments(genre)
                 has_vocals = analyzer.detect_vocals()
                 
                 lyrics, vocal_gender = None, None
                 if has_vocals:
-                    yield f"data: {json.dumps({'status': 'Separating vocals (this can be slow)...', 'progress': 40})}\n\n"
+                    yield f"data: {json.dumps({'status': 'Separating vocals (can be slow)...', 'progress': 40})}\n\n"
                     model_quality = request.form.get('model_quality', 'base')
-                    vocal_info = analyzer.extract_lyrics(model_quality=model_quality)
+                    demucs_model = request.form.get('demucs_model', 'htdemucs_ft')
+                    
+                    yield f"data: {json.dumps({'status': f'Transcribing lyrics with Whisper ({model_quality})...', 'progress': 60})}\n\n"
+                    vocal_info = analyzer.extract_lyrics(model_quality=model_quality, demucs_model=demucs_model)
                     lyrics = vocal_info.get('lyrics')
                     vocal_gender = vocal_info.get('gender')
                 
@@ -145,7 +152,8 @@ def analyze_audio():
             finally:
                 # In the new flow, we might not want to clean up immediately
                 # The client will tell us when it's okay to delete the file
-                pass
+                if DEVICE == 'cuda':
+                    torch.cuda.empty_cache()
         
         except Exception as e:
             logging.error(f"Error analyzing audio: {str(e)}")
@@ -264,6 +272,8 @@ if __name__ == '__main__':
                 pyi_splash.update_text("Initializing application...")
             except (ImportError, RuntimeError):
                 pass  # Ignore if splash screen fails
+        else:
+            logging.info("Initializing application...")
 
         from waitress import serve
         
@@ -273,6 +283,8 @@ if __name__ == '__main__':
                 pyi_splash.update_text("Starting web server...")
             except (ImportError, RuntimeError):
                 pass
+        else:
+            logging.info("Starting web server...")
 
         print("Starting Suno v5 Prompt Generator...")
         print("Open your browser to http://localhost:5001")

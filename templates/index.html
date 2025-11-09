@@ -53,6 +53,14 @@
                     </select>
                 </div>
                 <div class="options-section">
+                    <label for="separationQualitySelect">Separation Quality:</label>
+                    <select id="separationQualitySelect">
+                        <option value="htdemucs_ft" selected>Hybrid Transformer (High Quality)</option>
+                        <option value="hdemucs_mmi">Hybrid Demucs (Medium Quality)</option>
+                        <option value="mdx_extra">MDX-Extra (Fast)</option>
+                    </select>
+                </div>
+                <div class="options-section">
                     <label for="genreSelect">Genre for Analysis:</label>
                     <select id="genreSelect">
                         <!-- Genres will be populated dynamically -->
@@ -95,7 +103,21 @@
 
                 <div class="prompts-section">
                     <h2>✨ Generated Prompts</h2>
-                    <div id="promptsContainer"></div>
+                    <div class="tabs">
+                        <button class="tab-link active" onclick="openTab(event, 'standardPrompts')">Standard</button>
+                        <button class="tab-link" onclick="openTab(event, 'creativePrompts')">Creative</button>
+                        <button class="tab-link" onclick="openTab(event, 'advancedPrompts')">Advanced</button>
+                    </div>
+
+                    <div id="standardPrompts" class="tab-content active">
+                        <!-- Basic, Detailed, Style-Focused, Tempo-Focused -->
+                    </div>
+                    <div id="creativePrompts" class="tab-content">
+                        <!-- Thematic, Artist Style, Refinement -->
+                    </div>
+                    <div id="advancedPrompts" class="tab-content">
+                        <!-- Advanced Mode -->
+                    </div>
                 </div>
             </div>
         </div>

@@ -6,7 +6,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name='SunoPromptGenerator',
-    version='1.2.0',
+    version='1.3.0',
     author='T. Pitkänen',
     author_email='timbor@saunagames.fi',
     description='An AI-driven tool that analyzes any audio file to generate detailed prompts for Suno AI.',

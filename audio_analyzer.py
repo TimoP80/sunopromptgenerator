@@ -1,6 +1,7 @@
 import librosa
 import numpy as np
 import soundfile as sf
+import random
 import whisper
 import os
 import torch
@@ -58,9 +59,10 @@ class Separator:
         wav = (wav - ref.mean()) / (ref.std() + 1e-8)  # safer normalization
         wav = wav.to(self.device)
 
-        sources = apply_model(
-            self.model, wav[None], device=self.device, split=True, overlap=0.25, progress=True
-        )[0]
+        with torch.amp.autocast(self.device):
+            sources = apply_model(
+                self.model, wav[None], device=self.device, split=True, overlap=0.25, progress=True
+            )[0]
         sources = sources * ref.std() + ref.mean()
 
         separated_tracks = {
@@ -160,6 +162,7 @@ class AudioAnalyzer:
         
         # The order is important, as get_tempo may use other features.
         self.features['energy'] = self.get_energy()
+        self.features['energy_value'] = self.get_energy_value()
         self.features['spectral_centroid'] = self.get_spectral_centroid()
         self.features['tempo'] = self.get_tempo()
         self.features['key'] = self.get_key()
@@ -167,15 +170,40 @@ class AudioAnalyzer:
         self.features['mfcc'] = self.get_mfcc()
         self.features['chroma'] = self.get_chroma()
         self.features['spectral_rolloff'] = self.get_spectral_rolloff()
+        self.features['spectral_contrast'] = self.get_spectral_contrast()
+        self.features['spectral_bandwidth'] = self.get_spectral_bandwidth()
+        self.features['tonnetz'] = self.get_tonnetz()
         
         return self.features
 
     def get_key(self):
-        """Estimate musical key"""
-        chroma = librosa.feature.chroma_cqt(y=self.y, sr=self.sr)
+        """Estimate musical key and mode using a correlation method."""
+        chroma = librosa.feature.chroma_stft(y=self.y, sr=self.sr)
+        chroma_mean = np.mean(chroma, axis=1)
+        
+        # Key profiles for major and minor keys
+        major_profile = np.array([6.35, 2.23, 3.48, 2.33, 4.38, 4.09, 2.52, 5.19, 2.39, 3.66, 2.29, 2.88])
+        minor_profile = np.array([6.33, 2.68, 3.52, 5.38, 2.60, 3.53, 2.54, 4.75, 3.98, 2.69, 3.34, 3.17])
+
+        # Normalize profiles
+        major_profile /= np.sum(major_profile)
+        minor_profile /= np.sum(minor_profile)
+
         key_names = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
-        key_index = np.argmax(np.sum(chroma, axis=1))
-        return key_names[key_index]
+        
+        correlations = []
+        for i in range(12):
+            # Correlate with major and minor profiles for each possible key
+            major_corr = np.corrcoef(chroma_mean, np.roll(major_profile, i))[0, 1]
+            minor_corr = np.corrcoef(chroma_mean, np.roll(minor_profile, i))[0, 1]
+            correlations.append(('major', major_corr, key_names[i]))
+            correlations.append(('minor', minor_corr, key_names[i] + 'm'))
+
+        # Find the best correlation
+        best_match = max(correlations, key=lambda item: item[1])
+        
+        # Return the key name (e.g., "C#m", "F")
+        return best_match[2]
 
     def get_energy(self):
         """Calculate energy level"""
@@ -214,6 +242,21 @@ class AudioAnalyzer:
         """Get spectral rolloff (frequency distribution)"""
         rolloff = librosa.feature.spectral_rolloff(y=self.y, sr=self.sr)[0]
         return float(np.mean(rolloff))
+
+    def get_spectral_contrast(self):
+        """Get spectral contrast"""
+        contrast = librosa.feature.spectral_contrast(y=self.y, sr=self.sr)
+        return contrast.mean(axis=1).tolist()
+
+    def get_spectral_bandwidth(self):
+        """Get spectral bandwidth"""
+        bandwidth = librosa.feature.spectral_bandwidth(y=self.y, sr=self.sr)[0]
+        return float(np.mean(bandwidth))
+
+    def get_tonnetz(self):
+        """Get tonnetz (tonal centroids)"""
+        tonnetz = librosa.feature.tonnetz(y=self.y, sr=self.sr)
+        return tonnetz.mean(axis=1).tolist()
 
     def classify_genre(self, selected_genre=None):
         """
@@ -308,42 +351,44 @@ class AudioAnalyzer:
         
         return "Upbeat"
 
-    def detect_instruments(self):
-        """Detect likely instruments based on spectral features"""
-        genre = self.classify_genre()
-        instruments = []
-        
-        zcr = self.features['zero_crossing_rate']
-        spectral_centroid = self.features['spectral_centroid']
-        spectral_rolloff = self.features['spectral_rolloff']
-        energy = self.features['energy']
-        
-        # --- Electronic Music Instrument Detection ---
-        is_electronic = "Electronic" in genre or "EDM" in genre or "Hardcore" in genre or "Trance" in genre
+    def detect_instruments(self, genre):
+        """Detect likely instruments based on a genre-to-instrument mapping."""
+        instrument_map = {
+            "Trance": ["synthesizer", "drum machine", "bassline", "synth pads", "arpeggiator", "pluck synth"],
+            "House": ["drum machine", "synthesizer", "bassline", "piano", "vocals", "saxophone", "funky guitar"],
+            "Techno": ["drum machine", "synthesizer", "sequencer", "sampler", "industrial percussion"],
+            "Hard Techno": ["distorted drum machine", "industrial sounds", "hoover synth", "acid bassline", "dark synth stabs"],
+            "Drum & Bass": ["breakbeat", "sub-bass", "sampler", "synthesizer", "Reese bass"],
+            "Hardcore": ["distorted kick drum", "synthesizer", "sampler", "hoover synth", "aggressive synth"],
+            "Gabber": ["distorted kick drum", "synthesizer", "sampler", "hoover synth", "aggressive synth"],
+            "Hardstyle": ["reverse bass", "distorted kick", "screeching synth", "euphoric melody"],
+            "Frenchcore": ["distorted kick", "uptempo bassline", "sampler", "aggressive synth lead"],
+            "Gabberdisco": ["disco beat", "funky bassline", "gabber kick", "vocal samples", "string stabs", "electric piano"],
+            "Pop": ["vocals", "synthesizer", "drum machine", "electric guitar", "bass guitar", "piano"],
+            "Rock": ["electric guitar", "bass guitar", "drums", "vocals", "acoustic guitar"],
+            "Metal": ["distorted electric guitar", "double-bass drums", "bass guitar", "screaming vocals"],
+            "Hip-Hop": ["drum machine", "sampler", "turntables", "vocals", "synthesizer", "808 bass"],
+            "Ambient": ["synth pads", "drones", "field recordings", "soundscapes", "textures"]
+        }
 
-        # Kick Drum: percussive (high zcr) and low-frequency energy (low rolloff)
-        if zcr > 0.07 and spectral_rolloff < 2500 and is_electronic:
-            instruments.append("kick drum")
-        elif zcr > 0.08: # General percussion
-            instruments.append("percussion")
+        # Get the base genre
+        base_genre = genre.split('/')[0]
+
+        # Find matching instruments, default to a generic list
+        instruments = instrument_map.get(base_genre, ["synthesizer", "drums", "bass"])
         
-        # Synth Pad: low brightness (low centroid) but not necessarily bassy (mid rolloff)
-        if spectral_centroid < 1800 and spectral_rolloff > 2000 and energy != "high":
-            instruments.append("synth pad")
-        elif spectral_centroid > 3000:
-            instruments.append("bright synths")
-        elif spectral_centroid > 2000 and is_electronic:
-            instruments.append("synth lead")
-        elif spectral_centroid > 2000 and not is_electronic:
-            instruments.append("electric guitar")
+        # Add some general instruments based on spectral features as an addition
+        spectral_centroid = self.features.get('spectral_centroid', 0)
+        if spectral_centroid > 2800 and "bright synth" not in instruments:
+            instruments.append("bright synth")
+        if self.features.get('spectral_rolloff', 0) < 1800 and "deep bass" not in instruments:
+            instruments.append("deep bass")
+
+        # Randomly select a subset to keep it varied
+        num_instruments = random.randint(3, 5)
+        random.shuffle(instruments)
         
-        # Bass / Sub-bass: very low frequency content
-        if spectral_rolloff < 1500 and is_electronic:
-            instruments.append("sub-bass")
-        elif spectral_rolloff < 3000:
-            instruments.append("bass")
-        
-        return instruments
+        return list(set(instruments[:num_instruments])) # Return unique instruments
 
     def detect_vocals(self):
         """Detect if vocals are present"""
@@ -379,7 +424,7 @@ class AudioAnalyzer:
             print(f"Could not detect vocal gender: {e}")
             return None
 
-    def extract_lyrics(self, model_quality='base', output_dir='temp_audio', cleanup=True):
+    def extract_lyrics(self, model_quality='base', demucs_model='htdemucs_ft', output_dir='temp_audio', cleanup=True):
         """
         Separates vocals from the audio and transcribes them using Whisper.
         Returns a dictionary with lyrics and vocal gender.
@@ -391,7 +436,7 @@ class AudioAnalyzer:
         vocal_path = None
         try:
             # --- 1. Separate vocals using Demucs ---
-            separator = Separator(device=self.device)
+            separator = Separator(model_name=demucs_model, device=self.device)
             _, separated_tracks = separator.separate_audio_file(self.audio_path)
             
             # Find the vocal track and save it

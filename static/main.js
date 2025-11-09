@@ -5,7 +5,6 @@ const loading = document.getElementById('loading');
 const error = document.getElementById('error');
 const results = document.getElementById('results');
 const analysisGrid = document.getElementById('analysisGrid');
-const promptsContainer = document.getElementById('promptsContainer');
 const loadingStatus = document.getElementById('loadingStatus');
 const progressBar = document.getElementById('progressBar');
 const modelQualitySelect = document.getElementById('modelQualitySelect');
@@ -231,6 +230,7 @@ async function uploadAndAnalyze(file) {
     formData.append('audio', file);
     formData.append('model_quality', modelQuality);
     formData.append('selected_genre', genreSelect.value);
+    formData.append('demucs_model', document.getElementById('separationQualitySelect').value);
 
     try {
         const response = await fetch('/api/analyze', { // This is now a streaming endpoint
@@ -281,6 +281,19 @@ function escapeTemplateLiteral(str) {
     return String(str).replace(/`/g, '\\`').replace(/\${/g, '\\${');
 }
 
+function openTab(evt, tabName) {
+    const tabContents = document.getElementsByClassName("tab-content");
+    for (let i = 0; i < tabContents.length; i++) {
+        tabContents[i].classList.remove("active");
+    }
+    const tabLinks = document.getElementsByClassName("tab-link");
+    for (let i = 0; i < tabLinks.length; i++) {
+        tabLinks[i].classList.remove("active");
+    }
+    document.getElementById(tabName).classList.add("active");
+    evt.currentTarget.classList.add("active");
+}
+
 function displayResults(data) {
     currentAnalysisResult = data;
     const { analysis, prompts } = data;
@@ -313,9 +326,24 @@ function displayResults(data) {
         </div>
     `;
 
-    // Display prompts
-    promptsContainer.innerHTML = prompts.map((p, index) => `
-        ${p.name === 'Advanced Mode' ? `
+    // Categorize prompts
+    const standardPrompts = prompts.filter(p => ["Basic", "Detailed", "Style-Focused", "Tempo-Focused"].includes(p.name));
+    const creativePrompts = prompts.filter(p => ["Thematic", "Artist Style", "Refinement Prompt"].includes(p.name));
+    const advancedPrompts = prompts.filter(p => p.name === "Advanced Mode");
+
+    // Display prompts in their respective tabs
+    document.getElementById('standardPrompts').innerHTML = standardPrompts.map((p, index) => createPromptCard(p, `std-${index}`)).join('');
+    document.getElementById('creativePrompts').innerHTML = creativePrompts.map((p, index) => createPromptCard(p, `creative-${index}`)).join('');
+    document.getElementById('advancedPrompts').innerHTML = advancedPrompts.map((p, index) => createPromptCard(p, `adv-${index}`)).join('');
+
+    results.classList.add('active');
+    clearBtn.style.display = 'inline-block'; // Show clear button
+    exportBtn.style.display = 'inline-block';
+}
+
+function createPromptCard(p, index) {
+    if (p.name === 'Advanced Mode') {
+        return `
             <div class="prompt-card">
                 <div class="prompt-header">
                     <span class="prompt-name">Advanced Prompt</span>
@@ -336,21 +364,17 @@ function displayResults(data) {
                         <textarea id="lyrics-prompt-${index}" readonly>${escapeTemplateLiteral(p.prompt.lyrics_prompt)}</textarea>
                     </div>
                 </div>
-            </div>
-        ` : `
+            </div>`;
+    } else {
+        return `
             <div class="prompt-card">
                 <div class="prompt-header">
                     <span class="prompt-name">${p.name}</span>
                     <button class="copy-btn" onclick="copyPrompt('prompt-text-${index}', this)">Copy</button>
                 </div>
                 <div class="prompt-text" id="prompt-text-${index}">${escapeTemplateLiteral(p.prompt || '')}</div>
-            </div>
-        `}
-    `).join('');
-
-    results.classList.add('active');
-    clearBtn.style.display = 'inline-block'; // Show clear button
-    exportBtn.style.display = 'inline-block';
+            </div>`;
+    }
 }
 
 function copyPrompt(elementId, button) {
