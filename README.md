@@ -11,6 +11,7 @@ An advanced, AI-driven tool that analyzes any audio file to generate highly deta
 - **AI-Powered Vocal Separation**: Automatically isolates vocals from your track using Meta's `demucs` model for high-fidelity separation.
 - **Automatic Lyrics Transcription**: Transcribes the extracted vocals using OpenAI's `Whisper`, with selectable quality levels for speed vs. accuracy.
 - **Vocal Gender Detection**: Attempts to identify vocal pitch to suggest Male or Female lead vocals in the prompt.
+- **Extended Metadata Reading**: Reads Key and BPM information directly from audio file tags (MP3, FLAC) for faster and more accurate initial analysis, especially for files prepared with tools like Traktor.
 - **Expanded Genre Library**: Includes a wide range of genres and subgenres, with a focus on electronic music (Trance, House, Drum & Bass, Hardcore, and more).
 - **GPU Acceleration (PyTorch)**: Automatically uses an NVIDIA GPU for both vocal separation (`demucs`) and transcription (`Whisper`) to dramatically speed up analysis.
 - **Real-time Progress Updates**: The frontend displays the current analysis step and a progress bar.
@@ -47,49 +48,55 @@ This project relies on several key Python libraries:
 -   **PyTorch**: The underlying deep learning framework for `demucs` and `Whisper`.
 -   **Numpy**: For numerical operations on audio data.
 
-## Installation from Source
+## Building the Executable
 
-This project requires **Python 3.10**.
+This project includes robust scripts to build a standalone executable using PyInstaller. This packages the entire application, including the Python interpreter and all dependencies, into a single folder for easy distribution.
 
-### 1. Build the Source Distribution
+### Prerequisites
 
-First, build the source distribution by running the build script:
+- **Python 3.12**: Ensure you have Python 3.12 installed and accessible from your command line.
+- **Virtual Environment**: It is highly recommended to use a virtual environment to avoid conflicts with other Python projects.
 
-```bash
-build_sdist.bat
-```
+### Build Methods
 
-This will create a `dist` folder containing a `.tar.gz` file.
+You can build the application using either the command-line script (recommended for most users) or the GUI-based builder.
 
-### 2. Install the Package
+#### Method 1: Command-Line Build (Recommended)
 
-1.  **Create a Virtual Environment**: It is crucial to use a virtual environment with Python 3.10.
+1.  **Create and Activate Virtual Environment**:
     ```bash
-    py -3.10 -m venv .venv
-    ```
-
-2.  **Activate the Environment**:
-    ```bash
+    python -m venv .venv
     .venv\Scripts\activate
     ```
 
-3.  **Install the Package**: Install the package from the generated `.tar.gz` file.
+2.  **Run the Build Script**:
+    Execute the `build.bat` script. This script will automatically:
+    - Request administrator privileges (required for PyInstaller).
+    - Install all dependencies from `requirements.txt`.
+    - Clean up any old build artifacts.
+    - Run PyInstaller with the correct configuration.
+
     ```bash
-    pip install dist/SunoPromptGenerator-1.0.0.tar.gz
+    build.bat
     ```
 
-4.  **(Optional) Install GPU Support**: For NVIDIA GPU acceleration, install the correct version of PyTorch.
-    ```bash
-    pip uninstall torch -y
-    pip install torch==2.1.2 torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
-    ```
+3.  **Find the Executable**:
+    Once the build is complete, you will find the application in the `dist` folder.
 
-5.  **Run the App**:
-    ```bash
-    python -m SunoPromptGenerator.app
-    ```
+#### Method 2: GUI-Based Build
 
-6.  **Open Your Browser** to `http://localhost:5000`
+For a more interactive experience, you can use the GUI builder.
+
+1.  **Create and Activate Virtual Environment** (as described above).
+
+2.  **Run the GUI Build Script**:
+    ```bash
+    build_with_gui.bat
+    ```
+    This will launch a graphical interface that provides options to:
+    - Start the build process.
+    - Build and automatically run the application upon completion.
+    - Disable UPX compression (for a faster build at the cost of a larger file size).
 
 ## Usage
 
@@ -121,3 +128,7 @@ Contributions are welcome! If you have suggestions for improvements or new featu
 ## License
 
 This project is licensed under the MIT License. See the `LICENSE` file for details.
+
+## Changelog
+
+See `CHANGELOG.md` for a history of changes.

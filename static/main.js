@@ -15,6 +15,14 @@ const closeBtn = document.querySelector('.close-btn');
 const genreForm = document.getElementById('genreForm');
 const clearBtn = document.getElementById('clearBtn');
 const genreSelect = document.getElementById('genreSelect');
+const metadataContainer = document.getElementById('metadataContainer');
+const metadataGrid = document.getElementById('metadataGrid');
+const proceedBtn = document.getElementById('proceedBtn');
+const exportBtn = document.getElementById('exportBtn');
+
+let currentFile = null;
+let currentFilepath = null;
+let currentAnalysisResult = null;
 
 // --- Genre Population ---
 async function populateGenres() {
@@ -74,10 +82,53 @@ clearBtn.addEventListener('click', () => {
     clearBtn.style.display = 'none';
     uploadArea.style.display = 'block';
     fileInfo.textContent = '';
+    exportBtn.style.display = 'none';
 });
+
+exportBtn.addEventListener('click', () => {
+    if (currentAnalysisResult) {
+        exportResults(currentAnalysisResult);
+    }
+});
+
+async function exportResults(data) {
+    try {
+        const response = await fetch('/api/export', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+
+        if (!response.ok) {
+            throw new Error('Failed to export results.');
+        }
+
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.style.display = 'none';
+        a.href = url;
+        a.download = 'analysis.json';
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+
+    } catch (err) {
+        showError(err.message);
+    }
+}
 
 // Click to upload
 uploadArea.addEventListener('click', () => fileInput.click());
+
+// Prevent default drag and drop behavior for the whole window
+window.addEventListener('dragover', (e) => {
+    e.preventDefault();
+});
+
+window.addEventListener('drop', (e) => {
+    e.preventDefault();
+});
 
 // Drag and drop
 uploadArea.addEventListener('dragover', (e) => {
@@ -106,24 +157,73 @@ fileInput.addEventListener('change', (e) => {
 });
 
 function handleFile(file) {
-    // Show file info
+    currentFile = file;
     fileInfo.textContent = `Selected: ${file.name} (${(file.size / 1024 / 1024).toFixed(2)} MB)`;
     fileInfo.classList.add('active');
     
-    // Hide previous results and errors
     results.classList.remove('active');
     error.classList.remove('active');
+    metadataContainer.classList.remove('active');
     
-    // Hide upload area to prevent another upload while one is in progress
     uploadArea.style.display = 'none';
 
-    // Upload and analyze
-    uploadAndAnalyze(file);
+    preprocessFile(file);
 }
+
+async function preprocessFile(file) {
+    loading.classList.add('active');
+    loadingStatus.textContent = 'Extracting metadata...';
+    progressBar.style.width = '0%';
+
+    const formData = new FormData();
+    formData.append('audio', file);
+
+    try {
+        const response = await fetch('/api/preprocess', {
+            method: 'POST',
+            body: formData
+        });
+        const data = await response.json();
+
+        if (data.error) {
+            throw new Error(data.error);
+        }
+
+        displayMetadata(data.metadata);
+        currentFilepath = data.filepath;
+
+    } catch (err) {
+        showError(err.message);
+    } finally {
+        loading.classList.remove('active');
+    }
+}
+
+function displayMetadata(metadata) {
+    let metadataHTML = '';
+    for (const [key, value] of Object.entries(metadata)) {
+        metadataHTML += `
+            <div class="analysis-item">
+                <div class="analysis-label">${key}</div>
+                <div class="analysis-value">${value}</div>
+            </div>
+        `;
+    }
+
+    metadataGrid.innerHTML = metadataHTML;
+    metadataContainer.classList.add('active');
+}
+
+proceedBtn.addEventListener('click', () => {
+    if (currentFile) {
+        metadataContainer.classList.remove('active');
+        uploadAndAnalyze(currentFile);
+    }
+});
 
 async function uploadAndAnalyze(file) {
     loading.classList.add('active');
-    loadingStatus.textContent = 'Uploading file...';
+    loadingStatus.textContent = 'Starting analysis...';
     progressBar.style.width = '0%';
     
     const modelQuality = modelQualitySelect.value;
@@ -182,6 +282,7 @@ function escapeTemplateLiteral(str) {
 }
 
 function displayResults(data) {
+    currentAnalysisResult = data;
     const { analysis, prompts } = data;
 
     // Display analysis
@@ -249,6 +350,7 @@ function displayResults(data) {
 
     results.classList.add('active');
     clearBtn.style.display = 'inline-block'; // Show clear button
+    exportBtn.style.display = 'inline-block';
 }
 
 function copyPrompt(elementId, button) {

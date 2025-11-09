@@ -41,9 +41,15 @@
                 <div class="options-section">
                     <label for="modelQualitySelect">Transcription Quality:</label>
                     <select id="modelQualitySelect">
-                        <option value="tiny">Tiny (Fastest, Lower Accuracy)</option>
-                        <option value="base" selected>Base (Balanced)</option>
-                        <option value="medium">Medium (Slower, High Accuracy)</option>
+                        <option value="tiny">Tiny (Fastest, Multilingual)</option>
+                        <option value="tiny.en">Tiny (Fastest, English-Only)</option>
+                        <option value="base" selected>Base (Balanced, Multilingual)</option>
+                        <option value="base.en">Base (Balanced, English-Only)</option>
+                        <option value="small">Small (Good Quality, Multilingual)</option>
+                        <option value="small.en">Small (Good Quality, English-Only)</option>
+                        <option value="medium">Medium (High Quality, Multilingual)</option>
+                        <option value="medium.en">Medium (High Quality, English-Only)</option>
+                        <option value="large">Large (Best Quality, Multilingual)</option>
                     </select>
                 </div>
                 <div class="options-section">
@@ -53,6 +59,7 @@
                     </select>
                     <button class="btn btn-secondary" id="addGenreBtn" style="margin-left: 10px;">Add Custom Genre</button>
                     <button class="btn btn-secondary" id="clearBtn" style="margin-left: 10px; display: none;">Clear</button>
+                    <button class="btn btn-secondary" id="exportBtn" style="margin-left: 10px; display: none;">Export to JSON</button>
                 </div>
             </div>
 
@@ -65,6 +72,12 @@
             <input type="file" id="fileInput" accept=".mp3,.wav,.flac,.ogg,.m4a,.aac">
             
             <div class="file-info" id="fileInfo"></div>
+
+            <div class="metadata-container" id="metadataContainer">
+                <h2>Quick Info</h2>
+                <div class="analysis-grid" id="metadataGrid"></div>
+                <button class="btn" id="proceedBtn">Analyze & Generate Prompts</button>
+            </div>
             
             <div class="loading" id="loading">
                 <div class="spinner"></div>

@@ -1,3 +1,5 @@
+import random
+
 class PromptGenerator:
     """Generates Suno v5 compatible prompts from audio features"""
     
@@ -9,7 +11,47 @@ class PromptGenerator:
         self.has_vocals = has_vocals
         self.lyrics = lyrics
         self.vocal_gender = vocal_gender
-        
+
+        # Data for more varied prompts
+        self.tempo_map = [
+            (170, ["hyper-speed", "breakneck speed", "blistering pace"]),
+            (150, ["fast-paced", "high-velocity", "driving beat"]),
+            (130, ["up-tempo", "energetic rhythm", "brisk pace"]),
+            (110, ["moderate tempo", "steady groove", "medium pace"]),
+            (90, ["mid-tempo", "relaxed rhythm", "laid-back feel"]),
+            (70, ["slow-groove", "unhurried pace", "gentle rhythm"]),
+            (0, ["ballad tempo", "very slow", "glacial pace"])
+        ]
+        self.energy_map = {
+            "high": ["high-energy", "explosive", "intense", "powerful"],
+            "medium": ["driving", "flowing", "persistent", "steady energy"],
+            "low": ["mellow", "calm", "subtle", "gentle energy"]
+        }
+        self.spectral_map = [
+            (3000, ["bright", "crystal-clear", "sharp highs"]),
+            (1500, ["warm", "full-bodied", "rich mids"]),
+            (0, ["dark", "bassy", "deep lows"])
+        ]
+        self.zcr_map = [
+            (0.1, ["crisp", "textured", "buzzy"]),
+            (0.05, ["smooth", "clean", "pure tone"]),
+            (0, ["soft", "muted", "rounded"])
+        ]
+        self.artist_map = {
+            "Trance": ["Armin van Buuren", "Paul van Dyk", "Above & Beyond"],
+            "House": ["Frankie Knuckles", "Daft Punk", "Swedish House Mafia"],
+            "Techno": ["Richie Hawtin", "Carl Cox", "Adam Beyer"],
+            "Drum & Bass": ["Goldie", "Andy C", "Pendulum"],
+            "Hardcore/Gabber": ["Angerfist", "Partyraiser", "Dr. Peacock"]
+        }
+
+    def _get_random_descriptor(self, value, descriptor_map):
+        """Gets a random descriptor from a map based on a value."""
+        for threshold, descriptors in descriptor_map:
+            if value > threshold:
+                return random.choice(descriptors)
+        return ""
+
     def generate(self):
         """Generate a Suno v5 compatible prompt"""
         prompt_parts = []
@@ -22,34 +64,19 @@ class PromptGenerator:
         
         # Add tempo descriptor
         tempo = self.features['tempo']
-        if tempo > 170:
-            prompt_parts.append("hyper-speed")
-        elif tempo > 150:
-            prompt_parts.append("fast-paced")
-        elif tempo > 130:
-            prompt_parts.append("up-tempo")
-        elif tempo > 110:
-            prompt_parts.append("moderate tempo")
-        elif tempo > 90:
-            prompt_parts.append("mid-tempo")
-        elif tempo > 70:
-            prompt_parts.append("slow-groove")
-        else:
-            prompt_parts.append("ballad tempo")
-        
+        tempo_descriptor = self._get_random_descriptor(tempo, self.tempo_map)
+        if tempo_descriptor:
+            prompt_parts.append(tempo_descriptor)
+
         # Add BPM if specific
         if tempo > 100:
             prompt_parts.append(f"{int(tempo)} bpm")
         
         # Add energy descriptor
         energy = self.features['energy']
-        if energy == "high":
-            prompt_parts.append("high-energy")
-        elif energy == "medium":
-            prompt_parts.append("driving")
-        else: # low
-            prompt_parts.append("mellow")
-        
+        if energy in self.energy_map:
+            prompt_parts.append(random.choice(self.energy_map[energy]))
+
         # Add instruments
         if self.instruments:
             instrument_str = ", ".join(self.instruments[:3])  # Limit to 3
@@ -67,7 +94,7 @@ class PromptGenerator:
         prompt_parts.append(f"in {key}")
         
         # Join all parts
-        prompt = ", ".join(prompt_parts)
+        prompt = ", ".join(filter(None, prompt_parts))
         
         return prompt
     
@@ -80,23 +107,38 @@ class PromptGenerator:
         
         # Spectral characteristics
         spectral_centroid = self.features['spectral_centroid']
-        if spectral_centroid > 3000:
-            style_descriptors.append("bright")
-        elif spectral_centroid < 1500:
-            style_descriptors.append("warm")
-        
+        spectral_descriptor = self._get_random_descriptor(spectral_centroid, self.spectral_map)
+        if spectral_descriptor:
+            style_descriptors.append(spectral_descriptor)
+
         # Zero crossing rate (texture)
         zcr = self.features['zero_crossing_rate']
-        if zcr > 0.1:
-            style_descriptors.append("crisp")
-        elif zcr < 0.05:
-            style_descriptors.append("smooth")
-        
+        zcr_descriptor = self._get_random_descriptor(zcr, self.zcr_map)
+        if zcr_descriptor:
+            style_descriptors.append(zcr_descriptor)
+
         if style_descriptors:
             return f"{base_prompt}, {', '.join(style_descriptors)}"
         
         return base_prompt
     
+    def _calculate_structure_timings(self, structure_definition):
+        """Calculates timestamps for a given song structure based on BPM."""
+        bpm = self.features['tempo']
+        total_seconds = 0
+        timed_structure = []
+
+        for section, bars in structure_definition:
+            # Calculate duration: (bars * 4 beats/bar) / (BPM beats/min) * 60 sec/min
+            duration = (bars * 4 * 60) / bpm
+            
+            start_time = f"{int(total_seconds // 60)}:{int(total_seconds % 60):02d}"
+            total_seconds += duration
+            end_time = f"{int(total_seconds // 60)}:{int(total_seconds % 60):02d}"
+            
+            timed_structure.append(f"{section} – {start_time}–{end_time}")
+        return timed_structure, f"{int(total_seconds // 60)}:{int(total_seconds % 60):02d}"
+
     def _generate_structured_lyrics_template(self):
         """
         Generates a detailed, structured lyrics template based on genre,
@@ -108,9 +150,9 @@ class PromptGenerator:
 
         # --- 1. Metadata Block ---
         metadata = [
-            "[TITLE: Your Song Title Here]",
-            "[ARTIST STYLE: like ...]",
-            f"[Genre: {self.genre}]",
+            f"[TITLE: (A song about {self.mood})]",
+            f"[ARTIST STYLE: A mix of {random.choice(self.artist_map.get(self.genre, ['...']))} and modern pop]",
+            f"[Genre: {self.genre}, extended mix, DJ friendly 5-minute version]",
             f"[Mood: {self.mood}]",
             "[Era: 2020s]",
             f"[Energy: {self.features['energy']}]",
@@ -118,7 +160,7 @@ class PromptGenerator:
             f"[Key: {key} {key_mode}]",
         ]
         if self.has_vocals:
-            vocal_style = "Ethereal"
+            vocal_style = "Ethereal" if self.mood in ["Calm", "Melancholic"] else "Powerful"
             if self.vocal_gender:
                 metadata.append(f"[Vocal Style: {vocal_style} {self.vocal_gender} Lead]")
             else:
@@ -130,37 +172,57 @@ class PromptGenerator:
         metadata.append("[Production: Wide Stereo, Clean Master]")
 
         # --- 2. Structure Block (Genre-dependent and longer) ---
-        is_electronic = "Trance" in self.genre or "EDM" in self.genre or "Hardcore" in self.genre or "Electronic" in self.genre
+        is_electronic = any(g in self.genre for g in ["Trance", "EDM", "Hardcore", "Electronic", "Techno", "House"])
         
-        # Use actual lyrics if available, otherwise use placeholders
-        lyrics_placeholder = "Your lyrics here..."
-        verse_1_lyrics = self.lyrics if self.lyrics else lyrics_placeholder
-        chorus_lyrics = "(Chorus lyrics from above)" if self.lyrics else lyrics_placeholder
-        
+        # --- Dynamic Lyric Placeholders ---
+        lyric_theme = f"a story about {self.mood.lower()}"
+        if self.mood == "Energetic":
+            lyric_theme = "lyrics about overcoming challenges or celebrating a victory"
+        elif self.mood == "Melancholic":
+            lyric_theme = "a reflection on lost love or a past memory"
+
+        verse_1_lyrics = self.lyrics if self.lyrics else f"({lyric_theme})"
+        chorus_lyrics = "(A powerful, memorable chorus that captures the main theme)"
+
         structure = []
         if is_electronic:
-            metadata.append("[Structure: Extended DJ Mix]")
-            structure = [
-                "\n[INTRO – 0:00–0:45]",
-                "[Instrumental Only]",
-                "Atmospheric pads and soft arpeggios. Rolling kick drum builds the groove.",
-                "\n[BUILDUP 1 – 0:45–1:30]",
-                "Main synth lead teases the melody. Filter sweeps and risers build tension.",
-                "\n[VERSE 1 – 1:30–2:15]" if self.has_vocals else "",
-                verse_1_lyrics if self.has_vocals else "",
-                "\n[BREAKDOWN – 2:15–3:00]",
-                "Pads open up, melody emerges. Ethereal textures.",
-                "\n[BUILDUP 2 – 3:00–3:45]",
-                "Snare roll tension, risers, white noise swell.",
-                "\n[DROP / CHORUS – 3:45–4:30]",
-                chorus_lyrics if self.has_vocals else "(Big lead melody, full beat, hands-in-the-air moment)",
-                "\n[MIDSECTION – 4:30–5:15]",
-                "[Instrumental Only]",
-                "Main riff continues, evolving filter automation.",
-                "\n[OUTRO – 5:15–6:00]",
-                "(Instrumental fade-out)",
-                "Pads and bassline slowly filter down."
+            # Define structure with bars for timing calculation
+            structure_def = [
+                ("\n[INTRO", 16),
+                ("[Instrumental]", 0),
+                ("Atmospheric pads, soft arpeggios, rolling kick drum.", 0),
+                ("\n[BUILDUP 1", 32),
+                ("Main synth teases melody, filter sweeps, risers build tension.", 0),
+                ("\n[VERSE 1" if self.has_vocals else "\n[MAIN SECTION", 16),
+                (verse_1_lyrics if self.has_vocals else "[Instrumental] Main riff, evolving filter automation.", 0),
+                ("\n[BREAKDOWN", 32),
+                ("Pads open up, melody emerges. Ethereal textures.", 0),
+                ("\n[BUILDUP 2", 32),
+                ("Snare roll tension, risers, white noise swell.", 0),
+                ("\n[DROP / CHORUS", 32),
+                (chorus_lyrics if self.has_vocals else "[Instrumental] Big lead melody, full beat, hands-in-the-air moment.", 0),
+                ("\n[OUTRO", 32),
+                ("Pads and bassline slowly filter down, fade out.", 0)
             ]
+            
+            timed_structure, total_duration = self._calculate_structure_timings(structure_def)
+            metadata.append(f"[Structure: Extended DJ Mix, Total Length: {total_duration}]")
+            
+            # Reconstruct the final structure text with timings
+            final_structure = []
+            i = 0
+            while i < len(structure_def):
+                section_name = structure_def[i][0]
+                if section_name.startswith("\n["):
+                    final_structure.append(timed_structure.pop(0) + "]")
+                    i += 1
+                    while i < len(structure_def) and not structure_def[i][0].startswith("\n["):
+                        final_structure.append(structure_def[i][0])
+                        i += 1
+                else:
+                    i += 1
+            structure = final_structure
+
         else: # Default to a Pop/Rock structure
             metadata.append("[Structure: Standard Song]")
             structure = [
@@ -173,7 +235,7 @@ class PromptGenerator:
                 "\n[CHORUS]",
                 chorus_lyrics,
                 "\n[VERSE 2]",
-                "Your second verse lyrics here...",
+                f"(A second verse that expands on {lyric_theme})",
                 "\n[CHORUS]",
                 chorus_lyrics,
                 "\n[BRIDGE]",
@@ -210,13 +272,21 @@ class PromptGenerator:
         
         # --- Add genre-specific tags ---
         if "Trance" in self.genre:
-            style_tags.extend(["[Uplifting]", "[Euphoric]", "[Pluck Lead]", "[Rolling Bassline]"])
-        elif "Hardcore" in self.genre:
-            style_tags.extend(["[Distorted Kick]", "[High-Energy]", "[Aggressive Synth]"])
+            style_tags.extend(["[Uplifting]", "[Euphoric]", "[Pluck Lead]", "[Rolling Bassline]", "[Progressive Trance]", "[Trance Build]"])
+        elif "Hardcore" in self.genre or "Gabber" in self.genre:
+            style_tags.extend(["[Distorted Kick]", "[High-Energy]", "[Aggressive Synth]", "[Industrial Elements]", "[Dark Atmosphere]", "[High-Speed]"])
+        elif "Hardstyle" in self.genre:
+            style_tags.extend(["[Hardstyle Kick]", "[Reverse Bass]", "[Screeching Synth Lead]", "[Euphoric Melody]", "[High-Energy]"])
+        elif "Gabberdisco" in self.genre:
+            style_tags.extend(["[Uptempo Disco Beat]", "[Funky Bassline]", "[Distorted Gabber Kick]", "[Catchy Vocal Samples]", "[High-Energy]"])
         elif "House" in self.genre:
-            style_tags.extend(["[Four-on-the-floor]", "[Groovy Bassline]", "[Piano Chords]"])
+            style_tags.extend(["[Four-on-the-floor]", "[Groovy Bassline]", "[Piano Chords]", "[Progressive House]", "[Club Mix]", "[Soulful Vocals]", "[Classic House Piano]", "[Funky Guitar Riffs]"])
         elif "Drum & Bass" in self.genre:
             style_tags.extend(["[Breakbeat]", "[Deep Sub-bass]", "[Reese Bass]"])
+        elif "Hard Techno" in self.genre:
+            style_tags.extend(["[Driving Rhythm]", "[Hypnotic Sequence]", "[Industrial Kick]", "[Warehouse Rave]", "[Hypnotic Acid Line]", "[Hard Techno]"])
+        elif "Techno" in self.genre:
+            style_tags.extend(["[Driving Rhythm]", "[Hypnotic Sequence]", "[Industrial Elements]"])
             
         style_prompt = " ".join(style_tags)
         
@@ -224,6 +294,24 @@ class PromptGenerator:
         lyrics_prompt = self._generate_structured_lyrics_template()
         return {"style_prompt": style_prompt, "lyrics_prompt": lyrics_prompt}
 
+
+    def generate_thematic(self):
+        """Generates a prompt based on a theme or scene."""
+        themes = [
+            f"A soundtrack for a late-night drive through a neon-lit city, {self.genre}",
+            f"Music for a futuristic sci-fi movie scene, epic and {self.mood.lower()}",
+            f"An anthem for a massive festival, {self.features['energy']} and euphoric",
+            f"The feeling of watching a sunrise over the ocean, calm and serene {self.genre}",
+            f"A dark, underground club scene, hypnotic and driving {self.genre}"
+        ]
+        return random.choice(themes)
+
+    def generate_artist_style(self):
+        """Generates a prompt in the style of a famous artist."""
+        if self.genre in self.artist_map:
+            artist = random.choice(self.artist_map[self.genre])
+            return f"{self.genre} in the style of {artist}, {self.mood.lower()}, {self.features['energy']} energy"
+        return None # Return None if no artists are defined for the genre
 
     def generate_variations(self):
         """Generate multiple prompt variations"""
@@ -259,8 +347,22 @@ class PromptGenerator:
             "name": "Tempo-Focused",
             "prompt": tempo_prompt
         })
-        
-        # Variation 5: Advanced Mode
+
+        # Variation 5: Thematic
+        variations.append({
+            "name": "Thematic",
+            "prompt": self.generate_thematic()
+        })
+
+        # Variation 6: Artist Style
+        artist_prompt = self.generate_artist_style()
+        if artist_prompt:
+            variations.append({
+                "name": "Artist Style",
+                "prompt": artist_prompt
+            })
+
+        # Variation 7: Advanced Mode
         advanced_prompts = self.generate_advanced_mode()
         variations.append({
             "name": "Advanced Mode",

@@ -410,3 +410,31 @@ input[type="file"] {
     border-radius: 5px;
     border: 1px solid #ccc;
 }
+.metadata-container {
+    display: none;
+    margin-top: 20px;
+    padding: 30px;
+    background: #f8f9ff;
+    border-radius: 15px;
+    text-align: center;
+    border: 1px solid #e0e0e0;
+}
+
+.metadata-container.active {
+    display: block;
+}
+
+.metadata-container h2 {
+    margin-bottom: 20px;
+    color: #333;
+    font-size: 1.5em;
+}
+
+.metadata-container .analysis-grid {
+    margin-bottom: 30px;
+}
+
+.metadata-container .btn {
+    width: 100%;
+    padding: 15px;
+}

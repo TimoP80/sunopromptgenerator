@@ -10,7 +10,7 @@ class TestPromptGenerator(unittest.TestCase):
             'key': 'A#',
             'energy': 'high',
             'spectral_centroid': 3200.0,
-            'zero_crossing_rate': 0.09
+            'zero_crossing_rate': 0.11
         }
         self.genre = 'Trance'
         self.mood = 'Energetic'
@@ -30,12 +30,19 @@ class TestPromptGenerator(unittest.TestCase):
         self.assertIn(self.mood.lower(), prompt)
         self.assertIn("128 bpm", prompt)
         self.assertIn("vocals", prompt)
+        # Test if one of the possible energy descriptors is present
+        energy_descriptors = self.generator.energy_map[self.features['energy']]
+        self.assertTrue(any(desc in prompt for desc in energy_descriptors))
 
     def test_generate_detailed_prompt(self):
         """Test the detailed prompt generation."""
         prompt = self.generator.generate_detailed()
-        self.assertIn("bright", prompt)
-        self.assertIn("crisp", prompt)
+        # Test for spectral descriptors
+        spectral_descriptors = next(d for t, d in self.generator.spectral_map if self.features['spectral_centroid'] > t)
+        self.assertTrue(any(desc in prompt for desc in spectral_descriptors))
+        # Test for zcr descriptors
+        zcr_descriptors = next(d for t, d in self.generator.zcr_map if self.features['zero_crossing_rate'] > t)
+        self.assertTrue(any(desc in prompt for desc in zcr_descriptors))
 
     def test_generate_advanced_mode_prompts(self):
         """Test the advanced mode prompt generation."""
@@ -44,12 +51,32 @@ class TestPromptGenerator(unittest.TestCase):
         self.assertIn("[BPM: 128]", prompts['style_prompt'])
         self.assertIn("[Key: A# Minor]", prompts['style_prompt'])
         self.assertIn("[Vocal Style: Ethereal Female Lead]", prompts['lyrics_prompt'])
-        self.assertIn("[STRUCTURE: Extended DJ Mix]", prompts['lyrics_prompt'])
+        self.assertRegex(prompts['lyrics_prompt'], r"\[Structure: Extended DJ Mix, Total Length: \d{1,2}:\d{2}]")
+
+    def test_generate_thematic_prompt(self):
+        """Test the thematic prompt generation."""
+        prompt = self.generator.generate_thematic()
+        self.assertIsInstance(prompt, str)
+        self.assertGreater(len(prompt), 10)
+
+    def test_generate_artist_style_prompt(self):
+        """Test the artist style prompt generation."""
+        prompt = self.generator.generate_artist_style()
+        self.assertIn("in the style of", prompt)
+        self.assertIn(self.genre, prompt)
 
     def test_generate_variations(self):
         """Test that all prompt variations are generated."""
         variations = self.generator.generate_variations()
-        self.assertEqual(len(variations), 5)
+        self.assertGreaterEqual(len(variations), 6) # Should be 7 if artist is found
+        
+        variation_names = [v['name'] for v in variations]
+        self.assertIn("Basic", variation_names)
+        self.assertIn("Detailed", variation_names)
+        self.assertIn("Thematic", variation_names)
+        self.assertIn("Artist Style", variation_names)
+        self.assertIn("Advanced Mode", variation_names)
+
         # Check that the 'Advanced Mode' prompt is a dictionary
         advanced_prompt = next((p for p in variations if p['name'] == 'Advanced Mode'), None)
         self.assertIsNotNone(advanced_prompt)

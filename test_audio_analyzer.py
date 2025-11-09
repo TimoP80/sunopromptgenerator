@@ -30,6 +30,18 @@ class TestAudioAnalyzer(unittest.TestCase):
             self.assertIsInstance(tempo, float)
             self.assertGreater(tempo, 0)
 
+    def test_tempo_octave_correction(self):
+        """Test the octave correction for high-BPM tracks."""
+        # Mock a high-energy, bright track where tempo might be halved
+        self.analyzer.features['energy'] = 'high'
+        self.analyzer.features['spectral_centroid'] = 2300.0
+        
+        with patch('librosa.beat.beat_track') as mock_beat_track:
+            # Simulate a detected tempo of 100, which should be doubled
+            mock_beat_track.return_value = (100.0, np.array([]))
+            corrected_tempo = self.analyzer.get_tempo()
+            self.assertEqual(corrected_tempo, 200.0)
+
     def test_classify_genre_techno(self):
         """Test genre classification for Techno."""
         self.analyzer.features['tempo'] = 130
@@ -49,12 +61,40 @@ class TestAudioAnalyzer(unittest.TestCase):
         mood = self.analyzer.classify_mood()
         self.assertEqual(mood, "Energetic")
 
+    @patch('audio_analyzer.mutagen.File')
+    def test_extract_extended_metadata(self, mock_mutagen_file):
+        """Test extracting extended metadata like BPM and key from tags."""
+        # Mock the mutagen File object
+        mock_audio = MagicMock()
+        mock_audio.info.length = 300
+        mock_audio.info.sample_rate = 44100
+        mock_audio.info.channels = 2
+        
+        # Mock the 'easy' interface for mutagen
+        mock_mutagen_file.return_value = {
+            'bpm': ['128.0'],
+            'initialkey': ['Gm']
+        }
+
+        # Mock soundfile to avoid file I/O
+        with patch('audio_analyzer.sf.SoundFile') as mock_soundfile:
+            mock_sf_instance = MagicMock()
+            mock_sf_instance.__enter__.return_value.samplerate = 44100
+            mock_sf_instance.__enter__.return_value.channels = 2
+            mock_sf_instance.__enter__.return_value.frames = 22050 * 5 # 5 seconds
+            mock_soundfile.return_value = mock_sf_instance
+
+            metadata = self.analyzer.extract_metadata()
+            self.assertEqual(metadata.get('bpm'), 128.0)
+            self.assertEqual(metadata.get('key'), 'Gm')
+
     @patch('audio_analyzer.whisper.load_model')
-    @patch('audio_analyzer.AudioAnalyzer._separate_vocals_with_demucs')
+    @patch('audio_analyzer.Separator.separate_audio_file')
     def test_extract_lyrics(self, mock_separate, mock_load_model):
         """Test lyrics extraction workflow."""
         # Mock the vocal separation to return a dummy path
-        mock_separate.return_value = 'dummy_vocals.wav'
+        # Mock the separator to return a tuple with a dictionary containing vocal data
+        mock_separate.return_value = (None, {'vocals': np.array([0.1, 0.2, 0.3])})
         
         # Mock the whisper model and its transcribe method
         mock_transcribe = MagicMock()

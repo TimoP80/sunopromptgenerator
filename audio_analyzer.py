@@ -4,24 +4,25 @@ import soundfile as sf
 import whisper
 import os
 import torch
-import subprocess
 import importlib
 import genre_rules
-# Demucs v4 changed its API. We create a wrapper class to mimick the old Separator class.
-from demucs.apply import apply_model, BagOfModels
+import mutagen
+from demucs.apply import apply_model
 from demucs.pretrained import get_model
-from demucs.audio import AudioFile, save_audio, convert_audio
+from demucs.audio import AudioFile, convert_audio
 import torchaudio
+import subprocess
 
+# --- Demucs wrapper (unchanged) ---
 def load_track(track, audio_channels, samplerate):
     errors = {}
     wav = None
-
     try:
         wav = AudioFile(track).read(
             streams=0,
             samplerate=samplerate,
-            channels=audio_channels)
+            channels=audio_channels
+        )
     except FileNotFoundError:
         errors['ffmpeg'] = 'FFmpeg is not installed.'
     except subprocess.CalledProcessError:
@@ -36,9 +37,10 @@ def load_track(track, audio_channels, samplerate):
             wav = convert_audio(wav, sr, samplerate, audio_channels)
 
     if wav is None:
-        raise RuntimeError(f"Could not load file {track}. "
-                           f"Maybe it is not a supported file format? Errors: {errors}")
+        raise RuntimeError(f"Could not load file {track}. Errors: {errors}")
     return wav
+
+
 class Separator:
     def __init__(self, model_name='htdemucs_ft', device='cpu'):
         self.model = get_model(name=model_name)
@@ -53,102 +55,128 @@ class Separator:
     def separate_audio_file(self, file_path):
         wav = load_track(file_path, self.audio_channels, self.samplerate)
         ref = wav.mean(0)
-        wav = (wav - ref.mean()) / ref.std()
+        wav = (wav - ref.mean()) / (ref.std() + 1e-8)  # safer normalization
         wav = wav.to(self.device)
-        
-        sources = apply_model(self.model, wav[None], device=self.device, split=True, overlap=0.25, progress=True)[0]
+
+        sources = apply_model(
+            self.model, wav[None], device=self.device, split=True, overlap=0.25, progress=True
+        )[0]
         sources = sources * ref.std() + ref.mean()
-        
-        separated_tracks = {}
-        for i, source_name in enumerate(self.model.sources):
-            separated_tracks[source_name] = sources[i].cpu().numpy()
-            
+
+        separated_tracks = {
+            source_name: sources[i].cpu().numpy()
+            for i, source_name in enumerate(self.model.sources)
+        }
         return None, separated_tracks
 
+
+# --- Main Analyzer ---
 class AudioAnalyzer:
     """Analyzes audio files to extract musical features"""
-    
-    def __init__(self, audio_path):
+
+    def __init__(self, audio_path, device='cpu', model_cache=None):
         self.audio_path = audio_path
         self.y = None
         self.sr = None
         self.features = {}
-        
+        self.device = device
+        self.model_cache = model_cache if model_cache is not None else {}
+
     def load_audio(self):
         """Load audio file"""
-        self.y, self.sr = librosa.load(self.audio_path, sr=22050, duration=180)
+        self.y, self.sr = librosa.load(self.audio_path, sr=22050, mono=True)
+
+    def extract_metadata(self):
+        """Extracts all available metadata from the audio file."""
+        metadata = {}
         
+        # --- Get basic info with soundfile ---
+        try:
+            with sf.SoundFile(self.audio_path) as f:
+                metadata['Duration (s)'] = round(len(f) / f.samplerate, 2)
+                metadata['Sample Rate (Hz)'] = f.samplerate
+                metadata['Channels'] = f.channels
+        except Exception as e:
+            print(f"Could not extract basic metadata with soundfile: {e}")
+
+        # --- Get extended metadata with mutagen ---
+        try:
+            audio = mutagen.File(self.audio_path, easy=True)
+            if audio:
+                for key, value in audio.items():
+                    # Clean up key name for display
+                    display_key = key.replace('_', ' ').title()
+                    # Take the first element if it's a list
+                    display_value = value[0] if isinstance(value, list) else value
+                    metadata[display_key] = display_value
+        except Exception as e:
+            print(f"Could not extract extended metadata with mutagen: {e}")
+            
+        return metadata
+
+    # ---------- SAFE TEMPO WRAPPER ----------
+    def _safe_tempo(self, onset_env, hop_length):
+        """Librosa-version-safe tempo estimation"""
+        try:
+            # For librosa 0.10.0+
+            return librosa.feature.rhythm.tempo(onset_envelope=onset_env, sr=self.sr, hop_length=hop_length)[0]
+        except (AttributeError, TypeError):
+            try:
+                # For librosa < 0.10.0
+                return librosa.beat.tempo(onset_envelope=onset_env, sr=self.sr, hop_length=hop_length)[0]
+            except (AttributeError, TypeError):
+                # For very old librosa
+                return librosa.feature.tempo(onset_envelope=onset_env, sr=self.sr, hop_length=hop_length)[0]
+
+    def get_tempo(self):
+        """Extract tempo (BPM) with octave error correction."""
+        onset_env = librosa.onset.onset_strength(y=self.y, sr=self.sr)
+        
+        # Use beat_track for a more robust tempo estimation
+        tempo, _ = librosa.beat.beat_track(onset_envelope=onset_env, sr=self.sr)
+
+        # Fallback if beat_track fails (returns 0)
+        if tempo == 0:
+            tempo = self._safe_tempo(onset_env, hop_length=512)
+
+        # Correct for octave errors in high-energy, fast tracks
+        if 'spectral_centroid' not in self.features:
+            self.features['spectral_centroid'] = self.get_spectral_centroid()
+        if 'energy' not in self.features:
+            self.features['energy'] = self.get_energy()
+
+        spectral_centroid = self.features['spectral_centroid']
+        energy = self.features['energy']
+
+        # If tempo is low but the track is bright and high-energy, it might be an octave error.
+        if tempo < 110 and spectral_centroid > 2200 and energy == 'high':
+            tempo *= 2
+        
+        return round(float(tempo), 1)
+
     def analyze(self):
         """Perform complete audio analysis"""
         self.load_audio()
         
-        # Extract all features
-        self.features['tempo'] = self.get_tempo()
-        self.features['key'] = self.get_key()
+        # The order is important, as get_tempo may use other features.
         self.features['energy'] = self.get_energy()
         self.features['spectral_centroid'] = self.get_spectral_centroid()
+        self.features['tempo'] = self.get_tempo()
+        self.features['key'] = self.get_key()
         self.features['zero_crossing_rate'] = self.get_zero_crossing_rate()
         self.features['mfcc'] = self.get_mfcc()
         self.features['chroma'] = self.get_chroma()
         self.features['spectral_rolloff'] = self.get_spectral_rolloff()
         
         return self.features
-    
-    def get_tempo(self):
-        """Extract tempo (BPM) with enhanced accuracy."""
-        
-        # --- 1. Initial Estimate using Beat Tracking ---
-        # Use a broad start_bpm to guide the initial tracking
-        _, beat_frames = librosa.feature.beat_track(y=self.y, sr=self.sr, start_bpm=120, units='frames', tightness=100)
-        beat_times = librosa.frames_to_time(beat_frames, sr=self.sr)
-        
-        initial_tempo = 0
-        if len(beat_times) > 1:
-            initial_tempo = 60.0 / np.median(np.diff(beat_times))
 
-        # --- 2. Multi-Resolution Onset-Based Tempo Analysis ---
-        onset_env = librosa.onset.onset_strength(y=self.y, sr=self.sr)
-        
-        # Analyze with different hop lengths for robustness
-        hop_lengths = [256, 512, 1024]
-        tempo_estimates = []
-        for hop in hop_lengths:
-            onset_env_custom = librosa.onset.onset_strength(y=self.y, sr=self.sr, hop_length=hop)
-            tempo = librosa.feature.rhythm.tempo(onset_envelope=onset_env_custom, sr=self.sr, hop_length=hop)[0]
-            tempo_estimates.append(tempo)
-
-        # Add the initial beat-tracked tempo to the list of candidates
-        if initial_tempo > 0:
-            tempo_estimates.append(initial_tempo)
-
-        # --- 3. Post-Processing and Selection ---
-        # Find the median tempo, which is robust to outliers
-        median_tempo = np.median(tempo_estimates)
-
-        # Octave correction: Check if doubling or halving the median tempo
-        # brings it closer to one of the other estimates. This helps fix
-        # common "too slow" or "too fast" errors.
-        for i, est in enumerate(tempo_estimates):
-            if np.isclose(est, median_tempo * 2, atol=10):
-                # If an estimate is double the median, the median is likely the correct one
-                final_tempo = median_tempo
-                break
-            if np.isclose(est, median_tempo / 2, atol=10):
-                # If an estimate is half the median, it's likely the estimate is correct
-                final_tempo = est
-                break
-        else:
-            final_tempo = median_tempo
-
-        return round(final_tempo, 1)
-    
     def get_key(self):
         """Estimate musical key"""
         chroma = librosa.feature.chroma_cqt(y=self.y, sr=self.sr)
         key_names = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
         key_index = np.argmax(np.sum(chroma, axis=1))
         return key_names[key_index]
-    
+
     def get_energy(self):
         """Calculate energy level"""
         rms = librosa.feature.rms(y=self.y)[0]
@@ -161,32 +189,32 @@ class AudioAnalyzer:
             return "medium"
         else:
             return "high"
-    
+
     def get_spectral_centroid(self):
         """Get spectral centroid (brightness)"""
         spectral_centroids = librosa.feature.spectral_centroid(y=self.y, sr=self.sr)[0]
         return float(np.mean(spectral_centroids))
-    
+
     def get_zero_crossing_rate(self):
         """Get zero crossing rate (percussiveness indicator)"""
         zcr = librosa.feature.zero_crossing_rate(self.y)[0]
         return float(np.mean(zcr))
-    
+
     def get_mfcc(self):
         """Get MFCC features (timbre)"""
         mfcc = librosa.feature.mfcc(y=self.y, sr=self.sr, n_mfcc=13)
         return mfcc.mean(axis=1).tolist()
-    
+
     def get_chroma(self):
         """Get chroma features (harmony)"""
         chroma = librosa.feature.chroma_stft(y=self.y, sr=self.sr)
         return chroma.mean(axis=1).tolist()
-    
+
     def get_spectral_rolloff(self):
         """Get spectral rolloff (frequency distribution)"""
         rolloff = librosa.feature.spectral_rolloff(y=self.y, sr=self.sr)[0]
         return float(np.mean(rolloff))
-    
+
     def classify_genre(self, selected_genre=None):
         """
         Classify genre based on features using a rule-based engine.
@@ -256,7 +284,7 @@ class AudioAnalyzer:
         """Return the raw numerical energy value."""
         rms = librosa.feature.rms(y=self.y)[0]
         return np.mean(rms)
-    
+
     def classify_mood(self):
         """Classify mood based on features"""
         energy = self.features['energy']
@@ -279,7 +307,7 @@ class AudioAnalyzer:
             return "Emotional"
         
         return "Upbeat"
-    
+
     def detect_instruments(self):
         """Detect likely instruments based on spectral features"""
         genre = self.classify_genre()
@@ -316,7 +344,7 @@ class AudioAnalyzer:
             instruments.append("bass")
         
         return instruments
-    
+
     def detect_vocals(self):
         """Detect if vocals are present"""
         # Simplified vocal detection based on spectral features
@@ -363,7 +391,7 @@ class AudioAnalyzer:
         vocal_path = None
         try:
             # --- 1. Separate vocals using Demucs ---
-            separator = Separator()
+            separator = Separator(device=self.device)
             _, separated_tracks = separator.separate_audio_file(self.audio_path)
             
             # Find the vocal track and save it
@@ -377,8 +405,13 @@ class AudioAnalyzer:
                 return {'lyrics': None, 'gender': None}
 
             # --- 2. Transcribe vocals using Whisper ---
-            model = whisper.load_model(model_quality)
-            result = model.transcribe(vocal_path)
+            model_key = f"whisper_{model_quality}"
+            if model_key not in self.model_cache:
+                print(f"Loading Whisper model '{model_quality}' onto device '{self.device}'...")
+                self.model_cache[model_key] = whisper.load_model(model_quality, device=self.device)
+            
+            model = self.model_cache[model_key]
+            result = model.transcribe(vocal_path, fp16=torch.cuda.is_available())
             lyrics = result['text']
 
             # --- 3. Detect vocal gender from the separated track ---

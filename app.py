@@ -2,10 +2,12 @@ from flask import Flask, request, jsonify, Response, stream_with_context, render
 import json
 from werkzeug.utils import secure_filename
 import os
+import sys
 import traceback
 import torch
 import cpuinfo
 import logging
+import multiprocessing
 from audio_analyzer import AudioAnalyzer
 from prompt_generator import PromptGenerator
 from genre_rules import GENRE_RULES
@@ -15,6 +17,11 @@ app = Flask(__name__)
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+# --- Hardware Detection & Model Cache ---
+DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
+MODEL_CACHE = {}
+logging.info(f"Application starting. AI processing device set to: {DEVICE.upper()}")
 
 import config
 
@@ -92,7 +99,7 @@ def analyze_audio():
             
             try:
                 yield f"data: {json.dumps({'status': 'Analyzing audio features...', 'progress': 10})}\n\n"
-                analyzer = AudioAnalyzer(filepath)
+                analyzer = AudioAnalyzer(filepath, device=DEVICE, model_cache=MODEL_CACHE)
                 features = analyzer.analyze()
                 
                 yield f"data: {json.dumps({'status': 'Classifying genre and mood...', 'progress': 25})}\n\n"
@@ -118,24 +125,27 @@ def analyze_audio():
                 response = {
                     'success': True,
                     'analysis': {
-                        'tempo': features['tempo'],
-                        'key': features['key'],
-                        'energy': features['energy'],
                         'genre': genre,
                         'mood': mood,
                         'instruments': instruments,
                         'has_vocals': has_vocals,
                         'lyrics': lyrics,
-                        'vocal_gender': vocal_gender
+                        'vocal_gender': vocal_gender,
+                        'tempo': features.get('tempo'),
+                        'key': features.get('key'),
+                        'energy': features.get('energy'),
+                        'full_analysis_data': features
                     },
                     'prompts': variations
                 }
+                # Store the final result in a session or a temporary cache
+                # For simplicity, we'll just pass it back to the client to be exported
                 yield f"data: {json.dumps({'status': 'Complete!', 'progress': 100, 'result': response})}\n\n"
                 
             finally:
-                # Clean up uploaded file
-                if os.path.exists(filepath):
-                    os.remove(filepath)
+                # In the new flow, we might not want to clean up immediately
+                # The client will tell us when it's okay to delete the file
+                pass
         
         except Exception as e:
             logging.error(f"Error analyzing audio: {str(e)}")
@@ -143,6 +153,47 @@ def analyze_audio():
             yield f"data: {json.dumps({'error': f'Error analyzing audio: {str(e)}'})}\n\n"
 
     return Response(stream_with_context(generate_progress()), content_type='text/event-stream')
+
+@app.route('/api/preprocess', methods=['POST'])
+def preprocess_audio():
+    """Extracts basic metadata from the audio file without full analysis."""
+    try:
+        if 'audio' not in request.files:
+            return jsonify({'error': 'No audio file provided'}), 400
+        
+        file = request.files['audio']
+        if file.filename == '' or not allowed_file(file.filename):
+            return jsonify({'error': 'Invalid file'}), 400
+            
+        filename = secure_filename(file.filename)
+        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        file.save(filepath)
+        
+        analyzer = AudioAnalyzer(filepath, device=DEVICE, model_cache=MODEL_CACHE)
+        metadata = analyzer.extract_metadata()
+        
+        # --- Also perform a quick analysis for more detailed info ---
+        try:
+            # Load audio if not already loaded (some metadata doesn't require it)
+            if analyzer.y is None:
+                analyzer.load_audio()
+            
+            quick_analysis = {
+                "Tempo (BPM)": analyzer.get_tempo(),
+                "Key": analyzer.get_key(),
+                "Energy": analyzer.get_energy().title()
+            }
+            # Combine metadata and quick analysis, giving preference to specific analysis keys
+            metadata.update(quick_analysis)
+        except Exception as e:
+            logging.warning(f"Could not perform quick analysis: {e}")
+
+        return jsonify({'success': True, 'metadata': metadata, 'filepath': filepath})
+        
+    except Exception as e:
+        logging.error(f"Error during preprocessing: {str(e)}")
+        logging.error(traceback.format_exc())
+        return jsonify({'error': 'An internal error occurred.'}), 500
 
 @app.route('/api/health', methods=['GET'])
 def health_check():
@@ -180,12 +231,60 @@ def get_genres():
     """Return the current list of genre rules."""
     return jsonify(GENRE_RULES)
 
-def start_app():
-    """Starts the Flask application using Waitress."""
-    from waitress import serve
-    print("Starting Suno v5 Prompt Generator...")
-    print("Open your browser to http://localhost:5000")
-    serve(app, host='0.0.0.0', port=5000)
+@app.route('/api/export', methods=['POST'])
+def export_results():
+    """Exports analysis results to a JSON file."""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+            
+        # Set headers to trigger file download
+        headers = {
+            'Content-Disposition': 'attachment; filename=analysis.json',
+            'Content-Type': 'application/json'
+        }
+        return Response(json.dumps(data, indent=4), headers=headers)
+        
+    except Exception as e:
+        logging.error(f"Error exporting results: {str(e)}")
+        return jsonify({'error': 'An internal error occurred.'}), 500
 
 if __name__ == '__main__':
+    multiprocessing.freeze_support()
+
+    def start_app():
+        """Starts the Flask application using Waitress."""
+        # Check if running in a PyInstaller bundle
+        is_bundle = hasattr(sys, '_MEIPASS')
+
+        if is_bundle:
+            try:
+                import pyi_splash
+                pyi_splash.update_text("Initializing application...")
+            except (ImportError, RuntimeError):
+                pass  # Ignore if splash screen fails
+
+        from waitress import serve
+        
+        if is_bundle:
+            try:
+                import pyi_splash
+                pyi_splash.update_text("Starting web server...")
+            except (ImportError, RuntimeError):
+                pass
+
+        print("Starting Suno v5 Prompt Generator...")
+        print("Open your browser to http://localhost:5001")
+        
+        # Close the splash screen once the server is ready
+        if is_bundle:
+            try:
+                import pyi_splash
+                pyi_splash.close()
+            except (ImportError, RuntimeError):
+                pass # Not running in a PyInstaller bundle
+
+        serve(app, host='0.0.0.0', port=5001)
+
     start_app()
