@@ -1,10 +1,12 @@
 import os
 from dotenv import load_dotenv
 
-load_dotenv()
+# Build the absolute path to the .env file based on this script's location
+dotenv_path = os.path.join(os.path.dirname(__file__), '.env')
+load_dotenv(dotenv_path=dotenv_path)
 
 # --- API Keys ---
-SUNO_API_KEY = os.getenv("SUNO_API_KEY")
+SUNO_API_URL = os.getenv("SUNO_API_URL", "https://api.sunoapi.org")
 
 # Files and Uploads
 UPLOAD_FOLDER = 'uploads'

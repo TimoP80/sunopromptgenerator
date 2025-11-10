@@ -1,5 +1,5 @@
 import tkinter as tk
-from tkinter import ttk, filedialog, scrolledtext
+from tkinter import ttk, filedialog, scrolledtext, messagebox
 import threading
 import multiprocessing
 import queue
@@ -12,9 +12,10 @@ import requests
 import io
 from audio_analyzer import AudioAnalyzer
 from prompt_generator import PromptGenerator
-from genre_rules import GENRE_RULES
 from suno_client import SunoClient
 from gui_builder import BuildGUI
+import subprocess
+import config
 
 import sys
 
@@ -88,21 +89,187 @@ def run_analysis_in_process(q, filepath, device, genre_var, model_quality_var, d
     finally:
         _put_in_queue({'type': 'done'})
 
+class AccountManager(tk.Toplevel):
+    def __init__(self, master, app):
+        super().__init__(master)
+        self.app = app
+        self.title("Manage Suno Accounts")
+        self.geometry("500x400")
+        self.transient(master)
+        self.grab_set()
+
+        self.accounts = self.app.load_accounts()
+        self.selected_account = tk.StringVar(value=self.app.get_default_account_name())
+
+        self.create_widgets()
+
+    def create_widgets(self):
+        main_frame = ttk.Frame(self, padding=10)
+        main_frame.pack(fill=tk.BOTH, expand=True)
+
+        # --- Account List ---
+        list_frame = ttk.LabelFrame(main_frame, text="Accounts", padding=10)
+        list_frame.pack(fill=tk.BOTH, expand=True, pady=(0, 10))
+
+        self.account_listbox = tk.Listbox(list_frame, selectmode=tk.SINGLE)
+        for name in self.accounts.keys():
+            self.account_listbox.insert(tk.END, name)
+        self.account_listbox.pack(fill=tk.BOTH, expand=True, side=tk.LEFT)
+
+        scrollbar = ttk.Scrollbar(list_frame, orient=tk.VERTICAL, command=self.account_listbox.yview)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        self.account_listbox.config(yscrollcommand=scrollbar.set)
+
+        # --- Actions ---
+        actions_frame = ttk.Frame(main_frame)
+        actions_frame.pack(fill=tk.X)
+
+        ttk.Button(actions_frame, text="Add Account...", command=self.add_account).pack(side=tk.LEFT, padx=(0, 5))
+        ttk.Button(actions_frame, text="Remove Selected", command=self.remove_account).pack(side=tk.LEFT, padx=(0, 5))
+        ttk.Button(actions_frame, text="Set as Default", command=self.set_default).pack(side=tk.LEFT)
+
+        # --- Close Button ---
+        close_button = ttk.Button(main_frame, text="Close", command=self.destroy)
+        close_button.pack(side=tk.BOTTOM, pady=(10, 0))
+
+    def add_account(self):
+        dialog = AccountDialog(self, title="Add New Account")
+        if dialog.result:
+            name, api_key = dialog.result
+            if name and api_key:
+                self.accounts[name] = {"api_key": api_key}
+                self.app.save_accounts(self.accounts)
+                self.refresh_list()
+                if len(self.accounts) == 1: # If it's the first account, make it default
+                    self.app.set_default_account(name)
+
+    def remove_account(self):
+        selected_indices = self.account_listbox.curselection()
+        if not selected_indices:
+            messagebox.showwarning("No Selection", "Please select an account to remove.")
+            return
+        
+        account_name = self.account_listbox.get(selected_indices[0])
+        if messagebox.askyesno("Confirm Deletion", f"Are you sure you want to remove '{account_name}'?"):
+            del self.accounts[account_name]
+            self.app.save_accounts(self.accounts)
+            self.refresh_list()
+            
+            # If the deleted account was the default, clear the default
+            if self.app.get_default_account_name() == account_name:
+                self.app.set_default_account(None)
+
+    def set_default(self):
+        selected_indices = self.account_listbox.curselection()
+        if not selected_indices:
+            messagebox.showwarning("No Selection", "Please select an account to set as default.")
+            return
+            
+        account_name = self.account_listbox.get(selected_indices[0])
+        self.app.set_default_account(account_name)
+        messagebox.showinfo("Success", f"'{account_name}' has been set as the default account.")
+
+    def refresh_list(self):
+        self.account_listbox.delete(0, tk.END)
+        for name in self.accounts.keys():
+            self.account_listbox.insert(tk.END, name)
+
+class AccountDialog(tk.Toplevel):
+    def __init__(self, parent, title=None):
+        super().__init__(parent)
+        self.transient(parent)
+        if title:
+            self.title(title)
+        
+        self.parent = parent
+        self.result = None
+        
+        body = ttk.Frame(self)
+        self.initial_focus = self.body(body)
+        body.pack(padx=5, pady=5)
+        
+        self.buttonbox()
+        
+        self.grab_set()
+        
+        if not self.initial_focus:
+            self.initial_focus = self
+            
+        self.protocol("WM_DELETE_WINDOW", self.cancel)
+        self.geometry(f"+{parent.winfo_rootx()+50}+{parent.winfo_rooty()+50}")
+        self.initial_focus.focus_set()
+        self.wait_window(self)
+
+    def body(self, master):
+        ttk.Label(master, text="Account Name:").grid(row=0, column=0, sticky=tk.W, padx=5, pady=2)
+        ttk.Label(master, text="API Key:").grid(row=1, column=0, sticky=tk.W, padx=5, pady=2)
+        
+        self.name_entry = ttk.Entry(master, width=50)
+        self.api_key_entry = ttk.Entry(master, width=50)
+        
+        self.name_entry.grid(row=0, column=1, sticky=(tk.W, tk.E), padx=5, pady=2)
+        self.api_key_entry.grid(row=1, column=1, sticky=(tk.W, tk.E), padx=5, pady=2)
+        
+        master.columnconfigure(1, weight=1)
+        
+        return self.name_entry
+
+
+    def buttonbox(self):
+        box = ttk.Frame(self)
+        
+        w = ttk.Button(box, text="OK", width=10, command=self.ok, default=tk.ACTIVE)
+        w.pack(side=tk.LEFT, padx=5, pady=5)
+        w = ttk.Button(box, text="Cancel", width=10, command=self.cancel)
+        w.pack(side=tk.LEFT, padx=5, pady=5)
+        
+        self.bind("<Return>", self.ok)
+        self.bind("<Escape>", self.cancel)
+        
+        box.pack()
+
+    def ok(self, event=None):
+        self.result = (self.name_entry.get(), self.api_key_entry.get())
+        self.destroy()
+
+    def cancel(self, event=None):
+        self.destroy()
+
 class AudioPlayer(ttk.Frame):
-    def __init__(self, master, title, audio_url=None, audio_data=None, **kwargs):
+    def __init__(self, master, result_data, audio_data, task_id, app, **kwargs):
         super().__init__(master, **kwargs)
-        self.audio_url = audio_url
-        self.title = title
+        self.result_data = result_data
         self.audio_data = audio_data
+        self.task_id = task_id # This might be a list of clip_ids now
+        self.app = app
         self.playing = False
+
+        self.title = self.result_data.get('title', 'Untitled Track')
+        self.audio_url = self.result_data.get('audio_url')
+        self.audio_id = self.result_data.get('id') # This is now the clip_id
 
         self.columnconfigure(1, weight=1)
 
-        self.play_button = ttk.Button(self, text="▶ Play", command=self.toggle_play_pause)
+        # --- Player Controls ---
+        controls_frame = ttk.Frame(self, style="Card.TFrame")
+        controls_frame.grid(row=0, column=0, columnspan=2, sticky="ew", pady=(0, 5))
+        controls_frame.columnconfigure(1, weight=1)
+
+        self.play_button = ttk.Button(controls_frame, text="▶ Play", command=self.toggle_play_pause)
         self.play_button.grid(row=0, column=0, padx=(0, 5))
 
-        info_label = ttk.Label(self, text=self.title, anchor="w", style="Player.TLabel")
+        info_label = ttk.Label(controls_frame, text=self.title, anchor="w", style="Player.TLabel")
         info_label.grid(row=0, column=1, sticky="ew")
+
+        # --- Action Buttons ---
+        actions_frame = ttk.Frame(self, style="Card.TFrame")
+        actions_frame.grid(row=1, column=0, columnspan=2, sticky="ew")
+
+        self.wav_button = ttk.Button(actions_frame, text="Convert to WAV", command=self.convert_to_wav)
+        self.wav_button.pack(side=tk.LEFT, padx=(0, 5))
+
+        self.download_button = ttk.Button(actions_frame, text="Download MP3", command=self.download_mp3)
+        self.download_button.pack(side=tk.LEFT)
 
     def load_audio(self):
         if self.audio_data:
@@ -111,21 +278,24 @@ class AudioPlayer(ttk.Frame):
                 pygame.mixer.music.load(io.BytesIO(self.audio_data))
                 return True
             except pygame.error as e:
-                print(f"Error loading audio from data: {e}")
+                self.app.log(f"Error loading audio from data: {e}")
                 return False
         elif self.audio_url:
+            # This should already be handled by the main app, but as a fallback
+            self.app.log("Audio data not pre-loaded, attempting download...")
             try:
-                # Fallback to loading from URL
-                response = requests.get(self.audio_url, stream=True)
-                response.raise_for_status()
-                self.audio_data = response.content  # Store the content
+                client = self.app.suno_client
+                if not client:
+                    self.app.log("Suno client not available for fallback download.")
+                    return False
+                self.audio_data = client.download_audio(self.audio_url)
                 pygame.mixer.music.load(io.BytesIO(self.audio_data))
                 return True
-            except requests.exceptions.RequestException as e:
-                print(f"Error downloading audio: {e}")
+            except Exception as e:
+                self.app.log(f"Error downloading/loading audio: {e}")
                 return False
         else:
-            print("No audio source provided.")
+            self.app.log("No audio source provided.")
             return False
 
     def toggle_play_pause(self):
@@ -139,6 +309,33 @@ class AudioPlayer(ttk.Frame):
             self.play_button.config(text="▶ Play")
             self.playing = False
 
+
+    def convert_to_wav(self):
+        # This functionality is not supported by the unofficial API
+        messagebox.showinfo("Not Supported", "WAV conversion is not available with the current API.")
+
+    def download_mp3(self):
+        if not self.audio_data:
+            self.app.log("ERROR: Audio data not available for download.")
+            messagebox.showerror("Error", "Audio data has not been loaded yet. Please play the track first.")
+            return
+        
+        save_path = filedialog.asksaveasfilename(
+            defaultextension=".mp3",
+            filetypes=[("MP3 Audio", "*.mp3")],
+            title="Save MP3 File",
+            initialfile=f"{self.title}.mp3"
+        )
+        if save_path:
+            try:
+                with open(save_path, 'wb') as f:
+                    f.write(self.audio_data)
+                self.app.log(f"Successfully saved MP3 to: {save_path}")
+                messagebox.showinfo("Success", f"File saved to:\n{save_path}")
+            except IOError as e:
+                self.app.log(f"ERROR: Failed to save MP3 file: {e}")
+                messagebox.showerror("Save Error", f"Failed to save file:\n{e}")
+
 class PromptGeneratorGUI:
     def __init__(self, master):
         self.master = master
@@ -149,6 +346,8 @@ class PromptGeneratorGUI:
         self.filepath = None
         self.model_cache = {}
         self.analysis_results = {}
+        self.genre_rules = self.load_genre_rules()
+        self.suno_client = None # Will be initialized after account selection
         
         # --- Initialize Pygame Mixer ---
         pygame.init()
@@ -156,6 +355,7 @@ class PromptGeneratorGUI:
 
         self.setup_styles()
         self.detect_hardware()
+        self.initialize_suno_client()
 
         self._create_menubar()
         
@@ -241,6 +441,9 @@ class PromptGeneratorGUI:
 
         ttk.Label(status_frame, text=f"AI Processing (Demucs & Whisper): ● {processing_device}", style=status_style_name).pack(anchor="w")
 
+        self.credits_label = ttk.Label(status_frame, text="💰 Suno Credits: N/A")
+        self.credits_label.pack(anchor="w")
+
     def _create_file_selection_ui(self):
         file_frame = ttk.LabelFrame(self.main_frame, text="1. Select Audio File", padding=10)
         file_frame.pack(fill=tk.X, pady=(0, 10))
@@ -251,13 +454,16 @@ class PromptGeneratorGUI:
         self.browse_button = ttk.Button(file_frame, text="Browse...", command=self.browse_file)
         self.browse_button.pack(side=tk.RIGHT, padx=(5, 0))
 
+        self.import_button = ttk.Button(file_frame, text="Import Analysis...", command=self.import_analysis)
+        self.import_button.pack(side=tk.RIGHT, padx=(5, 0))
+
     def _create_options_ui(self):
         options_frame = ttk.LabelFrame(self.main_frame, text="2. Set Options", padding=10)
         options_frame.pack(fill=tk.X, pady=10)
         
         ttk.Label(options_frame, text="Genre:").grid(row=0, column=0, padx=5, pady=5, sticky="w")
         self.genre_var = tk.StringVar()
-        genres = ["Auto-detect"] + sorted([rule['genre'] for rule in GENRE_RULES])
+        genres = ["Auto-detect"] + sorted([rule['genre'] for rule in self.genre_rules])
         self.genre_menu = ttk.Combobox(options_frame, textvariable=self.genre_var, values=genres, state="readonly")
         self.genre_menu.set("Auto-detect")
         self.genre_menu.grid(row=0, column=1, padx=5, pady=5, sticky="ew")
@@ -291,8 +497,11 @@ class PromptGeneratorGUI:
         action_frame = ttk.Frame(self.main_frame)
         action_frame.pack(fill=tk.X, pady=10)
 
-        self.analyze_button = ttk.Button(action_frame, text="Generate Prompts", command=self.start_analysis_thread, style="Accent.TButton")
-        self.analyze_button.pack(fill=tk.X, ipady=5)
+        self.analyze_button = ttk.Button(action_frame, text="Generate Prompts from Audio", command=self.start_analysis_thread, style="Accent.TButton")
+        self.analyze_button.pack(side=tk.LEFT, expand=True, fill=tk.X, ipady=5, padx=(0, 5))
+
+        self.instrumental_button = ttk.Button(action_frame, text="Generate Instrumental Music", command=self.start_instrumental_generation_thread, style="Accent.TButton")
+        self.instrumental_button.pack(side=tk.LEFT, expand=True, fill=tk.X, ipady=5, padx=(5, 0))
 
         self.progress_var = tk.DoubleVar()
         self.progress_bar = ttk.Progressbar(self.main_frame, variable=self.progress_var, maximum=100)
@@ -508,62 +717,110 @@ class PromptGeneratorGUI:
         thread = threading.Thread(target=self.run_suno_generation, args=(prompt_data, generation_card), daemon=True)
         thread.start()
 
+    def start_instrumental_generation_thread(self):
+        self.notebook.select(self.generations_tab)
+        
+        genre = self.genre_var.get()
+        if genre == "Auto-detect":
+            genre = "epic cinematic"
+            self.log("No genre selected, using 'epic cinematic' as default for instrumental generation.")
+
+        prompt_name = f"Instrumental ({genre})"
+        self.log(f"Starting Suno generation for '{prompt_name}'...")
+        
+        prompt_data = {
+            'name': prompt_name,
+            'prompt': '',
+            'instrumental': True
+        }
+        
+        generation_card = self.add_generation_card(prompt_data['name'], "Queued")
+        
+        thread = threading.Thread(target=self.run_suno_generation, args=(prompt_data, generation_card), daemon=True)
+        thread.start()
+
     def run_suno_generation(self, prompt_data, generation_card):
         # This runs in a background thread
-        status_label = generation_card.winfo_children()[1]
+        status_label = generation_card.status_label
         try:
-            client = SunoClient()
-            prompt = prompt_data['prompt']
-            is_custom = prompt_data['name'] == "Advanced Mode"
-            
-            # Network call is safe in a background thread
-            # Construct the correct payload based on the new API structure
-            vocal_gender = self.analysis_results.get('vocal_gender')
-            if vocal_gender:
-                vocal_gender = vocal_gender[0].lower() # 'm' or 'f'
+            if not self.suno_client:
+                raise Exception("Suno client not initialized. Please add an account.")
 
-            kwargs = {
-                'title': f"AI Music - {prompt_data['name']}",
-                'tags': prompt.get('style_prompt') if is_custom else self.genre_var.get(),
-                'make_instrumental': False, # Or get this from the UI if you add an option
-                'vocal_gender': vocal_gender,
-                'auto_lyrics': self.auto_lyrics_var.get()
-            }
-            response = client.generate_music(prompt, is_custom=is_custom, **kwargs)
-            request_id = response.get('request_id')
-            
-            if not request_id:
-                raise Exception("Failed to get request ID from Suno API.")
+            prompt = prompt_data.get('prompt', '')
+            is_custom = prompt_data.get('name', '') == "Advanced Mode"
+            is_instrumental = prompt_data.get('instrumental', False)
 
-            self.log(f"Suno request started with ID: {request_id}")
-            self.poll_suno_status(request_id, prompt_data['name'], generation_card)
+            # --- Thread-safe UI access ---
+            payload_queue = queue.Queue()
+            def get_payload_from_ui():
+                title = generation_card.title_entry.get()
+                tags = generation_card.tags_entry.get()
+                
+                payload = {
+                    'prompt': prompt.get('lyrics_prompt', '') if is_custom else prompt,
+                    'is_custom': is_custom,
+                    'instrumental': is_instrumental,
+                    'title': title,
+                    'tags': tags,
+                }
+
+                if is_instrumental:
+                    payload['prompt'] = ''
+                    genre_tag = self.genre_var.get()
+                    if genre_tag == "Auto-detect":
+                        genre_tag = "epic cinematic"
+                    payload['tags'] = genre_tag
+                
+                payload_queue.put(payload)
+
+            self.master.after(0, get_payload_from_ui)
+            payload = payload_queue.get() # This will block until the main thread puts the payload in the queue
+            # --- End of thread-safe UI access ---
+
+            # The v1 API returns a list of generation objects
+            response_clips = self.suno_client.generate_music(payload)
+            generation_ids = [clip['id'] for clip in response_clips if 'id' in clip]
+            
+            if not generation_ids:
+                raise Exception("Failed to get generation IDs from Suno API.")
+
+            self.log(f"Suno request started with generation IDs: {generation_ids}")
+            self.poll_suno_status(generation_ids, prompt_data['name'], generation_card)
 
         except Exception as e:
             error_message = f"ERROR during Suno generation: {e}"
             self.log(error_message)
-            # Schedule UI updates on the main thread
             self.master.after(0, lambda: status_label.config(text=error_message))
 
-    def poll_suno_status(self, request_id, prompt_name, generation_card):
+    def poll_suno_status(self, request_ids, prompt_name, generation_card):
         # This runs in a background thread
         import time
-        status_label = generation_card.winfo_children()[1]
+        status_label = generation_card.status_label
+        progress_var = generation_card.progress_var
 
         while True:
             try:
-                client = SunoClient()
                 # Network call is safe in a background thread
-                response = client.check_generation_status(request_id)
+                response = self.suno_client.check_generation_status(request_ids)
                 status = response.get('status', 'unknown')
                 
+                completed_tracks = len(response.get('results', []))
+                total_tracks = len(request_ids)
+                progress = (completed_tracks / total_tracks) * 100 if total_tracks > 0 else 0
+                
+                status_text = f"Status: {status.title()} ({completed_tracks}/{total_tracks} complete)"
+
                 # Schedule UI updates on the main thread
-                self.master.after(0, lambda s=status: status_label.config(text=f"Status: {s}"))
+                def update_ui(s, p):
+                    status_label.config(text=s)
+                    progress_var.set(p)
+                self.master.after(0, lambda s=status_text, p=progress: update_ui(s, p))
 
                 if status == 'completed':
                     self.log(f"Suno generation '{prompt_name}' completed.")
                     results = response.get('results', [])
-                    # Schedule the creation of result widgets on the main thread
-                    self.master.after(0, lambda r=results, c=generation_card: self.display_suno_results(r, c))
+                    # The task_id is now the list of clip_ids
+                    self.master.after(0, lambda r=results, c=generation_card, t=request_ids: self.display_suno_results(r, c, t))
                     break
                 elif status == 'failed':
                     raise Exception(response.get('message', 'Generation failed without a specific message.'))
@@ -582,41 +839,68 @@ class PromptGeneratorGUI:
         card.pack(fill=tk.X, pady=5, padx=5)
         
         ttk.Label(card, text=f"Generating: {prompt_name}", font=("Segoe UI", 10, "bold")).pack(anchor="w")
-        ttk.Label(card, text=f"Status: {initial_status}").pack(anchor="w")
+        
+        # --- Title and Tags Entry ---
+        input_frame = ttk.Frame(card, style="Card.TFrame")
+        input_frame.pack(fill=tk.X, pady=5)
+        
+        ttk.Label(input_frame, text="Title:").grid(row=0, column=0, padx=(0, 5), sticky="w")
+        card.title_entry = ttk.Entry(input_frame)
+        card.title_entry.insert(0, f"AI Music - {prompt_name}")
+        card.title_entry.grid(row=0, column=1, sticky="ew")
+        
+        ttk.Label(input_frame, text="Tags:").grid(row=1, column=0, padx=(0, 5), sticky="w")
+        card.tags_entry = ttk.Entry(input_frame)
+        card.tags_entry.insert(0, self.genre_var.get() if self.genre_var.get() != "Auto-detect" else "")
+        card.tags_entry.grid(row=1, column=1, sticky="ew")
+        
+        input_frame.columnconfigure(1, weight=1)
+
+        # --- Progress and Status ---
+        progress_frame = ttk.Frame(card, style="Card.TFrame")
+        progress_frame.pack(fill=tk.X, pady=(5, 0))
+        progress_frame.columnconfigure(1, weight=1)
+
+        card.status_label = ttk.Label(progress_frame, text=f"Status: {initial_status}")
+        card.status_label.grid(row=0, column=0, sticky="w")
+
+        card.progress_var = tk.DoubleVar()
+        card.progress_bar = ttk.Progressbar(progress_frame, variable=card.progress_var, maximum=100)
+        card.progress_bar.grid(row=0, column=1, sticky="ew", padx=(10, 0))
         
         return card
 
-    def display_suno_results(self, results, card):
+    def display_suno_results(self, results, card, task_id):
         # This must be called from the main thread
         for widget in card.winfo_children():
-            if "Status:" in widget.cget("text"):
+            if "Status:" in widget.cget("text") or "Generating:" in widget.cget("text"):
                 widget.pack_forget()
+        
+        # Add a title to the card based on the first track
+        if results:
+            card_title = results[0].get('title', 'Generated Tracks')
+            ttk.Label(card, text=card_title, font=("Segoe UI", 10, "bold")).pack(anchor="w")
 
-        client = SunoClient()
         for i, result in enumerate(results):
-            clip_id = result.get('clip_id')
-            if clip_id:
-                try:
-                    # This is a network call, so it should be in a thread
-                    def fetch_and_play(clip_id, title):
-                        try:
-                            wav_data = client.get_wav(clip_id)
-                            # Switch back to the main thread to create the player
-                            self.master.after(0, lambda: self._create_player(card, title, wav_data))
-                        except Exception as e:
-                            self.log(f"Error fetching WAV for {clip_id}: {e}")
+            if result.get('audio_url'):
+                # This is a network call, so it should be in a thread
+                def fetch_and_play(result_data, task_id):
+                    try:
+                        audio_url = result_data.get('audio_url')
+                        self.log(f"Downloading audio for '{result_data.get('title')}'...")
+                        audio_data = self.suno_client.download_audio(audio_url)
+                        # Switch back to the main thread to create the player
+                        self.master.after(0, lambda: self._create_player(card, result_data, audio_data, task_id))
+                    except Exception as e:
+                        self.log(f"Error fetching audio for {result_data.get('title')}: {e}")
 
-                    title = result.get('title', f"Track {i+1}")
-                    threading.Thread(target=fetch_and_play, args=(clip_id, title), daemon=True).start()
-
-                except Exception as e:
-                    self.log(f"Error initiating WAV fetch for {clip_id}: {e}")
+                threading.Thread(target=fetch_and_play, args=(result, task_id), daemon=True).start()
             else:
-                self.log(f"No clip_id found for result: {result}")
+                self.log(f"No audio_url found for result: {result}")
 
-    def _create_player(self, parent, title, audio_data):
+    def _create_player(self, parent, result_data, audio_data, task_id):
         """Helper to create AudioPlayer on the main thread."""
-        player = AudioPlayer(parent, title=title, audio_data=audio_data, style="Card.TFrame")
+        player = AudioPlayer(parent, result_data=result_data, audio_data=audio_data, task_id=task_id, app=self, style="Card.TFrame")
         player.pack(fill=tk.X, pady=5)
 
     def _create_menubar(self):
@@ -625,7 +909,19 @@ class PromptGeneratorGUI:
 
         file_menu = tk.Menu(menubar, tearoff=0)
         menubar.add_cascade(label="File", menu=file_menu)
+        file_menu.add_command(label="Import Analysis...", command=self.import_analysis)
+        file_menu.add_separator()
         file_menu.add_command(label="Exit", command=self.master.quit)
+
+        suno_menu = tk.Menu(menubar, tearoff=0)
+        menubar.add_cascade(label="Suno", menu=suno_menu)
+        suno_menu.add_command(label="Check Credits...", command=self.check_suno_credits)
+        suno_menu.add_command(label="Manage Accounts...", command=self.open_account_manager)
+
+        # --- Settings Menu ---
+        settings_menu = tk.Menu(menubar, tearoff=0)
+        menubar.add_cascade(label="Settings", menu=settings_menu)
+        settings_menu.add_command(label="Edit Genre Rules...", command=self.edit_genre_rules)
 
         build_menu = tk.Menu(menubar, tearoff=0)
         menubar.add_cascade(label="Build", menu=build_menu)
@@ -645,11 +941,177 @@ class PromptGeneratorGUI:
             return
         return "break"
 
+    def open_account_manager(self):
+        AccountManager(self.master, self)
+
+    def check_suno_credits(self, show_messagebox=False):
+        """Starts a thread to check Suno API credits and updates the GUI."""
+        if not self.suno_client:
+            if show_messagebox:
+                messagebox.showerror("Error", "Suno client not initialized. Please add an account.")
+            return
+        
+        self.credits_label.config(text="💰 Suno Credits: Loading...")
+        threading.Thread(target=self._run_check_credits_worker, args=(show_messagebox,), daemon=True).start()
+
+    def _run_check_credits_worker(self, show_messagebox):
+        """Worker thread for fetching credits."""
+        try:
+            credits_info = self.suno_client.get_credits()
+            credits = credits_info.get("credits", "N/A")
+            
+            def update_gui():
+                self.credits_label.config(text=f"💰 Suno Credits: {credits}")
+                if show_messagebox:
+                    messagebox.showinfo("Suno Credits", f"Remaining Credits: {credits}")
+            
+            self.master.after(0, update_gui)
+            self.log(f"Successfully refreshed Suno credits: {credits}")
+        except Exception as e:
+            error_message = f"ERROR checking credits: {e}"
+            self.log(error_message)
+            def update_gui_error():
+                self.credits_label.config(text="💰 Suno Credits: Error")
+                if show_messagebox:
+                    messagebox.showerror("Error", error_message)
+            self.master.after(0, update_gui_error)
+
+    def auto_refresh_credits(self):
+        """Periodically fetches credits every 30 seconds."""
+        self.check_suno_credits(show_messagebox=False)
+        self.master.after(30000, self.auto_refresh_credits) # 30 seconds
+
+    def load_genre_rules(self):
+        """Loads genre rules from an external JSON file."""
+        try:
+            with open("genre_rules.json", "r") as f:
+                return json.load(f)
+        except (FileNotFoundError, json.JSONDecodeError) as e:
+            self.log(f"ERROR: Could not load genre_rules.json: {e}")
+            messagebox.showerror("Error", "Could not load or parse genre_rules.json. Please ensure it exists and is valid.")
+            return []
+
+    def edit_genre_rules(self):
+        """Opens the genre_rules.json file in the default text editor."""
+        try:
+            os.startfile("genre_rules.json")
+            self.log("Opened genre_rules.json for editing. Please restart the application to apply changes.")
+        except Exception as e:
+            self.log(f"ERROR: Could not open genre_rules.json: {e}")
+            messagebox.showerror("Error", f"Could not open genre_rules.json: {e}")
+
+    def import_analysis(self):
+        """Imports a JSON analysis file and generates prompts."""
+        filepath = filedialog.askopenfilename(
+            title="Select an Analysis JSON File",
+            filetypes=(("JSON Files", "*.json"), ("All files", "*.*"))
+        )
+        if not filepath:
+            return
+
+        try:
+            with open(filepath, 'r') as f:
+                analysis_data = json.load(f)
+            
+            # --- Validate the imported data ---
+            required_keys = ['genre', 'mood', 'instruments', 'has_vocals', 'full_analysis_data']
+            if not all(key in analysis_data for key in required_keys):
+                raise ValueError("Invalid analysis file. Missing one or more required keys.")
+
+            self.log(f"Successfully imported analysis from: {os.path.basename(filepath)}")
+            
+            # --- Generate prompts from the imported data ---
+            generator = PromptGenerator(
+                features=analysis_data['full_analysis_data'],
+                genre=analysis_data['genre'],
+                mood=analysis_data['mood'],
+                instruments=analysis_data['instruments'],
+                has_vocals=analysis_data['has_vocals'],
+                lyrics=analysis_data.get('lyrics'),
+                vocal_gender=analysis_data.get('vocal_gender')
+            )
+            variations = generator.generate_variations()
+            
+            # --- Display the results ---
+            for tab in [self.prompts_tab, self.analysis_tab]:
+                tab.delete(1.0, tk.END)
+
+            self.display_results(variations, analysis_data)
+            self.update_progress(100, "Prompts generated from imported data.")
+            self.master.after(1500, lambda: self.update_progress(0))
+
+        except (json.JSONDecodeError, ValueError) as e:
+            self.log(f"ERROR: Could not import analysis file: {e}")
+            messagebox.showerror("Import Error", f"Could not import or parse the analysis file:\n{e}")
+        except Exception as e:
+            self.log(f"ERROR: An unexpected error occurred during import: {e}")
+            messagebox.showerror("Import Error", f"An unexpected error occurred: {e}")
+
+
     def on_closing(self):
         if pygame.mixer.get_init():
             pygame.mixer.music.stop()
             pygame.mixer.quit()
         self.master.destroy()
+
+    def load_accounts(self):
+        try:
+            with open("suno_accounts.json", "r") as f:
+                return json.load(f)
+        except (FileNotFoundError, json.JSONDecodeError):
+            return {}
+
+    def save_accounts(self, accounts):
+        with open("suno_accounts.json", "w") as f:
+            json.dump(accounts, f, indent=4)
+
+    def get_default_account_name(self):
+        accounts = self.load_accounts()
+        for name, data in accounts.items():
+            if data.get('default'):
+                return name
+        # If no default, return the first account name or None
+        return next(iter(accounts), None)
+
+    def set_default_account(self, name):
+        accounts = self.load_accounts()
+        for acc_name, data in accounts.items():
+            data['default'] = (acc_name == name)
+        self.save_accounts(accounts)
+        self.initialize_suno_client() # Re-initialize with the new default
+
+    def initialize_suno_client(self):
+        account_name = self.get_default_account_name()
+        if account_name:
+            accounts = self.load_accounts()
+            api_key = accounts[account_name].get('api_key')
+            if api_key:
+                self.suno_client = SunoClient(api_key=api_key, base_url=config.SUNO_API_URL)
+                self.log(f"Suno client initialized with account: {account_name}")
+                # Start the auto-refresh cycle
+                self.master.after(1000, self.auto_refresh_credits)
+            else:
+                self.log(f"ERROR: No API key found for default account '{account_name}'.")
+                self.suno_client = None
+                self.credits_label.config(text="💰 Suno Credits: N/A")
+        else:
+            self.log("Suno client not initialized. No default account configured.")
+            self.suno_client = None
+            self.credits_label.config(text="💰 Suno Credits: N/A")
+            # If no accounts exist at all, prompt for creation.
+            if not self.load_accounts():
+                self.master.after(100, self.prompt_for_account_creation)
+            # Otherwise, accounts exist but no default is set, so show a warning.
+            else:
+                messagebox.showwarning(
+                    "Default Account Not Set",
+                    "No default Suno account is configured. Please set a default account from the 'Suno > Manage Accounts' menu to enable music generation and credit checking."
+                )
+
+    def prompt_for_account_creation(self):
+        if messagebox.askyesno("No Suno Account Found", "No Suno account configured. Would you like to add one now?"):
+            self.open_account_manager()
+
 
 if __name__ == "__main__":
     # --- Splash Screen Handling ---

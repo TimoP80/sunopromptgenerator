@@ -1,0 +1,316 @@
+[
+  {
+    "genre": "Frenchcore",
+    "rules": {
+      "energy": "high",
+      "tempo": { "min": 195 },
+      "spectral_centroid": { "not": null },
+      "zero_crossing_rate": { "not": null }
+    },
+    "typical_instruments": ["distorted kick drum", "hardstyle bass", "screaming lead synth"],
+    "texture": "relentless, aggressive, high-frequency lead layers",
+    "notes": "Very fast tempo electronic hardcore style."
+  },
+  {
+    "genre": "Psytrance",
+    "rules": {
+      "energy": "high",
+      "tempo": { "min": 138, "max": 150 },
+      "spectral_centroid": { "min": 2600 },
+      "zero_crossing_rate": { "not": null }
+    },
+    "typical_instruments": ["rolling bassline", "acid synth", "tribal percussion", "hallucinogenic pads"],
+    "texture": "bright, layered arpeggios, evolving synth patterns",
+    "notes": "High tempo trance style emphasising psycho-active sounds."
+  },
+  {
+    "genre": "Breakbeat",
+    "rules": {
+      "tempo": { "min": 130, "max": 150 },
+      "zero_crossing_rate": { "min": 0.1 }
+    },
+    "typical_instruments": ["sampled break drums", "funky bass", "synth stabs"],
+    "texture": "crunchy drum transient, hybrid textures between house and hip-hop",
+    "notes": "Fusion genre with rhythmic breaks rather than straight four-on-the-floor."
+  },
+  {
+    "genre": "Hard Techno",
+    "rules": {
+      "energy": "high",
+      "tempo": { "min": 145, "max": 165 }
+    },
+    "typical_instruments": ["heavy kick", "industrial synths", "distorted percussion"],
+    "texture": "pure club intensity, minimal yet punishing",
+    "notes": "Hard underground techno pace and force."
+  },
+  {
+    "genre": "Techno",
+    "rules": {
+      "tempo": { "min": 125, "max": 150 }
+    },
+    "typical_instruments": ["4-on-the-floor kick", "dark pads", "modular synth loops"],
+    "texture": "hypnotic, repetitive, groove oriented",
+    "notes": "Classic techno groove, dancefloor focussed."
+  },
+  {
+    "genre": "Melodic Techno",
+    "rules": {
+      "energy": { "not": "low" },
+      "spectral_centroid": { "min": 2300 },
+      "tempo": { "min": 120, "max": 130 }
+    },
+    "typical_instruments": ["melodic leads", "sweeping pads", "arpeggiated synths"],
+    "texture": "emotive, uplifting yet driving",
+    "notes": "Combines melodic structures with techno rhythms."
+  },
+  {
+    "genre": "Experimental",
+    "rules": {
+      "energy": "low",
+      "spectral_centroid": { "max": 1500 }
+    },
+    "typical_instruments": ["ambient textures", "field recordings", "modular noise"],
+    "texture": "abstract, exploratory, minimal rhythm",
+    "notes": "Avant-garde or ambient style outside main dancefloor norms."
+  },
+  {
+    "genre": "Gabberdisco",
+    "rules": {
+      "energy": "high",
+      "tempo": { "min": 190 },
+      "spectral_centroid": { "min": 3200 }
+    },
+    "typical_instruments": ["hard kick", "bright synth leads", "disco groove elements"],
+    "texture": "fast, bright, intense fusion of disco and hardcore motifs",
+    "notes": "Hybrid genre at very high tempo with disco feel."
+  },
+  {
+    "genre": "Hardcore/Gabber",
+    "rules": {
+      "energy": "high",
+      "tempo": { "min": 180 }
+    },
+    "typical_instruments": ["distorted kick", "speed-bass", "shouted vocals"],
+    "texture": "brutal, high-speed, often aggressive tones",
+    "notes": "One of the fastest, loudest forms in underground dance."
+  },
+  {
+    "genre": "Happy Hardcore",
+    "rules": {
+      "energy": "high",
+      "spectral_centroid": { "min": 2800 },
+      "tempo": { "min": 160, "max": 180 }
+    },
+    "typical_instruments": ["uplifting lead synths", "vocal chops", "fast drums"],
+    "texture": "bright, euphoric high-speed hardcore",
+    "notes": "Faster than typical hardcore, positive mood."
+  },
+  {
+    "genre": "Drum & Bass",
+    "rules": {
+      "tempo": { "min": 170, "max": 180 },
+      "zero_crossing_rate": { "min": 0.1 }
+    },
+    "typical_instruments": ["fast breakbeats", "sub bass", "rolling snares"],
+    "texture": "fast, tight rhythm section, deep bass drive",
+    "notes": "High tempo drum-based electronic genre."
+  },
+  {
+    "genre": "Trance",
+    "rules": {
+      "energy": "high",
+      "spectral_centroid": { "min": 2500 },
+      "tempo": { "min": 135, "max": 142 }
+    },
+    "typical_instruments": ["sweeping pads", "supersaw leads", "vocal hooks"],
+    "texture": "uplifting, euphoric, bright melodies over steady beats",
+    "notes": "Classic trance vibe in dance context."
+  },
+  {
+    "genre": "Progressive Trance",
+    "rules": {
+      "energy": { "not": "low" },
+      "spectral_centroid": { "min": 2500 },
+      "tempo": { "min": 128, "max": 135 }
+    },
+    "typical_instruments": ["evolving arpeggios", "rich pad layers", "subtle percussion"],
+    "texture": "smooth build-ups, melodic journey, less aggressiveness",
+    "notes": "Less intense than peak trance but still dance orientated."
+  },
+  {
+    "genre": "Disco House",
+    "rules": {
+      "spectral_centroid": { "min": 2800 },
+      "tempo": { "min": 120, "max": 128 }
+    },
+    "typical_instruments": ["funky bass", "string stabs", "four-on-the-floor kick"],
+    "texture": "danceable, bright, retro house vibe",
+    "notes": "House music with disco influences."
+  },
+  {
+    "genre": "Progressive House",
+    "rules": {
+      "energy": { "not": "low" },
+      "spectral_centroid": { "min": 2400 },
+      "tempo": { "min": 125, "max": 130 }
+    },
+    "typical_instruments": ["sweeping leads", "layered synths", "driving groove"],
+    "texture": "melodic drive with good flow, dancefloor oriented",
+    "notes": "A popular house subgenre with build-ups and emotional hooks."
+  },
+  {
+    "genre": "Jackin' House",
+    "rules": {
+      "energy": "high",
+      "tempo": { "min": 124, "max": 128 },
+      "zero_crossing_rate": { "min": 0.09 }
+    },
+    "typical_instruments": ["funky drums", "sampled vocals", "house bassline"],
+    "texture": "groovy, bouncy, high-transient rhythm",
+    "notes": "House style with emphasis on groove and bounce."
+  },
+  {
+    "genre": "Funky House",
+    "rules": {
+      "energy": { "not": "low" },
+      "spectral_centroid": { "min": 2500 },
+      "tempo": { "min": 125, "max": 130 }
+    },
+    "typical_instruments": ["funky guitar or keys", "bass groove", "synth leads"],
+    "texture": "feel-good, bright, danceable house with funk influence",
+    "notes": "Positive mood house music with groove."
+  },
+  {
+    "genre": "Tech House",
+    "rules": {
+      "spectral_centroid": { "min": 2200 },
+      "tempo": { "min": 123, "max": 128 },
+      "zero_crossing_rate": { "min": 0.07 }
+    },
+    "typical_instruments": ["minimal synth stabs", "tight percussion", "groove bass"],
+    "texture": "mix of techno precision + house groove",
+    "notes": "Club focused style bridging techno & house."
+  },
+  {
+    "genre": "Soulful House",
+    "rules": {
+      "energy": { "not": "high" },
+      "spectral_centroid": { "max": 2200 },
+      "tempo": { "min": 120, "max": 126 }
+    },
+    "typical_instruments": ["soulful vocals", "warm pads", "deep house bass"],
+    "texture": "smooth, warm, emotional house groove",
+    "notes": "House with soulful or gospel influence."
+  },
+  {
+    "genre": "EDM",
+    "rules": {
+      "energy": { "not": "low" },
+      "spectral_centroid": { "min": 2200 },
+      "tempo": { "min": 120 },
+      "zero_crossing_rate": { "min": 0.08 }
+    },
+    "typical_instruments": ["big room kicks", "supersaw leads", "festival structures"],
+    "texture": "high production value, broad appeal, energetic",
+    "notes": "General term for mainstream electronic dance music."
+  },
+  {
+    "genre": "Pop",
+    "rules": {
+      "spectral_centroid": { "min": 2000 },
+      "tempo": { "min": 100, "max": 140 }
+    },
+    "typical_instruments": ["vocals", "synth pads", "clean drums", "pop bass"],
+    "texture": "catchy, melodic, radio-friendly",
+    "notes": "Popular music style crossing many other genres."
+  },
+  {
+    "genre": "Electronic",
+    "rules": {
+      "energy": { "not": "low" },
+      "spectral_centroid": { "min": 2200 },
+      "zero_crossing_rate": { "min": 0.08 }
+    },
+    "typical_instruments": ["synthetic textures", "modular synths", "drum machines"],
+    "texture": "modern electronic sound design focus, less genre-bound",
+    "notes": "Umbrella for non-vocal, design-oriented electronic music."
+  },
+  {
+    "genre": "Fast Rock",
+    "rules": {
+      "energy": "high",
+      "tempo": { "min": 140 }
+    },
+    "typical_instruments": ["electric guitar", "strong drums", "bass"],
+    "texture": "rock energy, uptempo pace",
+    "notes": "Rock driven style faster than average."
+  },
+  {
+    "genre": "Rock",
+    "rules": {
+      "tempo": { "min": 120, "max": 140 }
+    },
+    "typical_instruments": ["guitar riffs", "drums", "bass", "vocals"],
+    "texture": "typical rock instrumentation and drive",
+    "notes": "Mainstream rock tempo range."
+  },
+  {
+    "genre": "Indie Pop",
+    "rules": {
+      "energy": { "not": "low" },
+      "spectral_centroid": { "min": 2500 },
+      "tempo": { "min": 90, "max": 120 }
+    },
+    "typical_instruments": ["guitar", "synths", "vocals", "light drums"],
+    "texture": "bright, melodic, usually less hard-edge",
+    "notes": "Alternative pop style with indie aesthetics."
+  },
+  {
+    "genre": "Alternative Rock",
+    "rules": {
+      "energy": { "not": "low" },
+      "tempo": { "min": 90, "max": 120 }
+    },
+    "typical_instruments": ["guitar", "vocals", "drums", "bass"],
+    "texture": "edgy but moderate tempo rock",
+    "notes": "Rock style with alternative/indie influences."
+  },
+  {
+    "genre": "Ballad",
+    "rules": {
+      "energy": "low",
+      "tempo": { "min": 90, "max": 120 }
+    },
+    "typical_instruments": ["vocals", "piano", "soft strings", "acoustic guitar"],
+    "texture": "emotional, slow, intimate",
+    "notes": "Slow tempo, emotional focus."
+  },
+  {
+    "genre": "Ambient",
+    "rules": {
+      "energy": "low",
+      "tempo": { "max": 90 }
+    },
+    "typical_instruments": ["pads", "field recordings", "soft textures"],
+    "texture": "atmospheric, minimal rhythm or none",
+    "notes": "Listening rather than dance category."
+  },
+  {
+    "genre": "Hip-Hop",
+    "rules": {
+      "tempo": { "max": 90 }
+    },
+    "typical_instruments": ["rap vocals", "808 drums", "bass", "samples"],
+    "texture": "beat-centric, groove oriented, voice narrated",
+    "notes": "Urban music style driven by rhythm and vocals."
+  },
+  {
+    "genre": "Hardstyle",
+    "rules": {
+      "tempo": { "min": 145, "max": 160 }
+    },
+    "typical_instruments": ["distorted kick", "hard bass", "screech leads"],
+    "texture": "festival-hard electronic dance style",
+    "notes": "Hard electronic genre with strong club/festival feel."
+  }
+]

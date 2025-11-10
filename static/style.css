@@ -26,6 +26,7 @@ body.dark-mode {
     text-align: center;
     color: white;
     margin-bottom: 40px;
+    padding-top: 60px;
 }
 
 .header h1 {
@@ -535,6 +536,27 @@ body.dark-mode .prompt-text textarea {
     border-color: #555;
 }
 
+.generation-inputs {
+    display: flex;
+    gap: 10px;
+    margin: 10px 0;
+}
+
+.generation-inputs input {
+    flex: 1;
+    padding: 8px 12px;
+    border-radius: 8px;
+    border: 1px solid #ccc;
+    font-size: 1em;
+    background: #f8f9ff;
+}
+
+body.dark-mode .generation-inputs input {
+    background: #0f3460;
+    color: #e0e0e0;
+    border-color: #555;
+}
+
 .error {
     background: #ffebee;
     color: #c62828;
@@ -606,6 +628,18 @@ body.dark-mode .prompt-text textarea {
     border-radius: 5px;
     border: 1px solid #ccc;
 }
+
+body.dark-mode .modal-content {
+    background-color: #16213e;
+    border-color: #555;
+}
+
+body.dark-mode .form-group input {
+    background-color: #0f3460;
+    color: #e0e0e0;
+    border-color: #555;
+}
+
 .metadata-container {
     display: none;
     margin-top: 20px;
@@ -636,10 +670,13 @@ body.dark-mode .prompt-text textarea {
 }
 
 /* --- Theme Switcher --- */
-.theme-switcher-container {
+.header-controls {
     position: absolute;
     top: 20px;
     right: 20px;
+    display: flex;
+    gap: 10px;
+    align-items: center;
 }
 
 .theme-switcher {
@@ -764,6 +801,43 @@ body.dark-mode .history-item-date {
     margin-bottom: 20px;
 }
 
+.history-item-title {
+    font-weight: bold;
+}
+
+.account-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px;
+    border-radius: 5px;
+    margin-bottom: 5px;
+}
+
+.account-item.default {
+    background-color: rgba(102, 126, 234, 0.1);
+}
+
+.btn-danger {
+    background: #c62828;
+    padding: 5px 10px;
+    font-size: 0.8em;
+}
+
+.btn-danger:hover {
+    background: #a62323;
+}
+
+.credits-info {
+    font-size: 0.9em;
+    margin-top: 8px;
+    color: #555;
+}
+
+body.dark-mode .credits-info {
+    color: #9a9a9a;
+}
+
 /* --- History Panel --- */
 .history-panel {
     position: fixed;
@@ -826,6 +900,40 @@ body.dark-mode .history-item:hover {
 body.dark-mode .history-item-date {
     color: #9a9a9a;
 }
+
+.account-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px;
+    border-radius: 5px;
+    margin-bottom: 5px;
+}
+
+.account-item.default {
+    background-color: rgba(102, 126, 234, 0.1);
+}
+
+.btn-danger {
+    background: #c62828;
+    padding: 5px 10px;
+    font-size: 0.8em;
+}
+
+.btn-danger:hover {
+    background: #a62323;
+}
+
+.credits-info {
+    font-size: 0.9em;
+    margin-top: 8px;
+    color: #555;
+}
+
+body.dark-mode .credits-info {
+    color: #9a9a9a;
+}
+
 /* Quick Generation Section */
 .quick-generation-tabs {
     display: flex;
@@ -877,4 +985,36 @@ body.dark-mode .history-item-date {
     color: var(--text-color);
     font-family: inherit;
     resize: vertical;
+}
+.generation-progress-container {
+    margin-top: 10px;
+    background-color: #e0e0e0;
+    border-radius: 5px;
+    overflow: hidden;
+}
+
+.generation-progress-bar {
+    width: 0%;
+    height: 8px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    transition: width 0.4s ease;
+}
+
+.audio-track {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    margin-top: 10px;
+}
+
+.audio-track audio {
+    flex-grow: 1;
+}
+#credits-display {
+    font-weight: bold;
+    color: #667eea;
+}
+
+body.dark-mode #credits-display {
+    color: #9a9a9a;
 }

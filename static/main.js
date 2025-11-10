@@ -23,7 +23,17 @@ const historyBtn = document.getElementById('historyBtn');
 const historyPanel = document.getElementById('historyPanel');
 const closeHistoryBtn = document.getElementById('closeHistoryBtn');
 const historyContainer = document.getElementById('historyContainer');
+const generationHistoryBtn = document.getElementById('generationHistoryBtn');
+const generationHistoryPanel = document.getElementById('generationHistoryPanel');
+const closeGenerationHistoryBtn = document.getElementById('closeGenerationHistoryBtn');
+const generationHistoryContainer = document.getElementById('generationHistoryContainer');
 const saveHistoryBtn = document.getElementById('saveHistoryBtn');
+const settingsBtn = document.getElementById('settingsBtn');
+const settingsModal = document.getElementById('settingsModal');
+const settingsCloseBtn = document.getElementById('settingsCloseBtn');
+const addAccountBtn = document.getElementById('addAccountBtn');
+const accountsList = document.getElementById('accountsList');
+const creditsDisplay = document.getElementById('credits-display');
 
 let currentFile = null;
 let currentFilepath = null;
@@ -44,10 +54,19 @@ async function populateGenres() {
 // --- Modal Logic ---
 addGenreBtn.onclick = () => { modal.style.display = 'block'; }
 closeBtn.onclick = () => { modal.style.display = 'none'; }
+settingsCloseBtn.onclick = () => { settingsModal.style.display = 'none'; }
+
 window.onclick = (event) => {
     if (event.target == modal) {
         modal.style.display = 'none';
+    } else if (event.target == settingsModal) {
+        settingsModal.style.display = 'none';
     }
+}
+
+settingsBtn.onclick = () => {
+    settingsModal.style.display = 'block';
+    loadAccounts();
 }
 
 genreForm.addEventListener('submit', async (e) => {
@@ -381,7 +400,11 @@ function createPromptCard(p, index) {
             <div class="prompt-card">
                 <div class="prompt-header">
                     <span class="prompt-name">Advanced Prompt</span>
-                    <button class="generate-btn" onclick="generateMusic('${p.name}', {style: '${stylePromptId}', lyrics: '${lyricsPromptId}'})">Generate Music</button>
+                    <button class="generate-btn" onclick="generateMusic('${p.name}', {style: '${stylePromptId}', lyrics: '${lyricsPromptId}', title: 'title-${index}', tags: 'tags-${index}'})">Generate Music</button>
+                </div>
+                <div class="generation-inputs">
+                    <input type="text" id="title-${index}" placeholder="Title (optional)">
+                    <input type="text" id="tags-${index}" placeholder="Tags (optional)">
                 </div>
                 <div class="prompt-subsection">
                     <div class="prompt-header">
@@ -409,8 +432,12 @@ function createPromptCard(p, index) {
                     <span class="prompt-name">${p.name}</span>
                     <div>
                         <button class="copy-btn" onclick="copyPrompt('${promptId}', this)">Copy</button>
-                        <button class="generate-btn" onclick="generateMusic('${p.name}', '${promptId}')">Generate Music</button>
+                        <button class="generate-btn" onclick="generateMusic('${p.name}', '${promptId}', 'title-${index}', 'tags-${index}')">Generate Music</button>
                     </div>
+                </div>
+                <div class="generation-inputs">
+                    <input type="text" id="title-${index}" placeholder="Title (optional)">
+                    <input type="text" id="tags-${index}" placeholder="Tags (optional)">
                 </div>
                 <div class="prompt-text">
                     <textarea id="${promptId}">${escapeTemplateLiteral(p.prompt || '')}</textarea>
@@ -437,45 +464,46 @@ function showError(message) {
     error.classList.add('active');
 }
 
-async function generateMusic(promptName, ids) {
-    let promptPayload;
+async function generateMusic(promptName, ids, titleId, tagsId) {
     const isCustom = promptName === 'Advanced Mode';
+    const title = titleId ? document.getElementById(titleId).value : '';
+    const tags = tagsId ? document.getElementById(tagsId).value : '';
+    
+    let payload = {
+        is_custom: isCustom,
+        title: title,
+        tags: tags,
+        prompt_name: promptName
+    };
 
     if (isCustom) {
-        const stylePrompt = document.getElementById(ids.style).value;
-        const lyricsPrompt = document.getElementById(ids.lyrics).value;
-        promptPayload = {
-            style_prompt: stylePrompt,
-            lyrics_prompt: lyricsPrompt
+        payload.prompt = {
+            style_prompt: document.getElementById(ids.style).value,
+            lyrics_prompt: document.getElementById(ids.lyrics).value
         };
+        // If tags are not provided in their own field, use the style prompt
+        if (!payload.tags) {
+            payload.tags = payload.prompt.style_prompt;
+        }
     } else {
-        promptPayload = document.getElementById(ids).value;
+        payload.prompt = document.getElementById(ids).value;
     }
 
-    // Switch to the generations tab
-    openTab({ currentTarget: document.querySelector('.tab-link[onclick*="sunoGenerations"]') }, 'sunoGenerations');
-    
-    const generationsContainer = document.getElementById('generationsContainer');
-    const generationCard = document.createElement('div');
-    generationCard.className = 'generation-card';
-    generationCard.innerHTML = `
-        <div class="generation-header">
-            <span class="generation-name">Generating: ${promptName}</span>
-            <div class="spinner"></div>
-        </div>
-        <div class="generation-status">Status: Queued</div>
-    `;
-    generationsContainer.appendChild(generationCard);
+    await _executeGeneration(promptName, payload);
+}
+
+async function pollGenerationStatus(requestId, cardElement) {
+    const statusElement = cardElement.querySelector('.generation-status');
+    const spinnerElement = cardElement.querySelector('.spinner');
+    const progressBar = cardElement.querySelector('.generation-progress-bar');
+    const totalTracks = requestId.split(',').length;
 
     try {
-        const response = await fetch('/api/generate-music', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                prompt: promptPayload,
-                is_custom: isCustom,
-                prompt_name: promptName
-            })
+        const apiKey = document.getElementById('apiKey').value;
+        const response = await fetch(`/api/generation-status/${requestId}`, {
+            headers: {
+                'Authorization': `Bearer ${apiKey}`
+            }
         });
         const data = await response.json();
 
@@ -483,29 +511,11 @@ async function generateMusic(promptName, ids) {
             throw new Error(data.error);
         }
 
-        pollGenerationStatus(data.request_id, generationCard);
-
-    } catch (err) {
-        const statusElement = generationCard.querySelector('.generation-status');
-        statusElement.textContent = `Error: ${err.message}`;
-        statusElement.classList.add('generation-error');
-        generationCard.querySelector('.spinner').style.display = 'none';
-    }
-}
-
-async function pollGenerationStatus(requestId, cardElement) {
-    const statusElement = cardElement.querySelector('.generation-status');
-    const spinnerElement = cardElement.querySelector('.spinner');
-
-    try {
-        const response = await fetch(`/api/generation-status/${requestId}`);
-        const data = await response.json();
-
-        if (data.error) {
-            throw new Error(data.error);
-        }
-
-        statusElement.textContent = `Status: ${data.status}`;
+        const completedTracks = data.results ? data.results.length : 0;
+        const progress = totalTracks > 0 ? (completedTracks / totalTracks) * 100 : 0;
+        
+        statusElement.textContent = `Status: ${data.status.title()} (${completedTracks}/${totalTracks} complete)`;
+        progressBar.style.width = `${progress}%`;
 
         if (data.status === 'completed' && data.results) {
             spinnerElement.style.display = 'none';
@@ -518,7 +528,17 @@ async function pollGenerationStatus(requestId, cardElement) {
         }
 
     } catch (err) {
-        statusElement.textContent = `Error: ${err.message}`;
+        let errorMessage = err.message;
+        // Try to parse a more specific error from the response
+        try {
+            const errorJson = JSON.parse(err.message);
+            if (errorJson.detail) {
+                errorMessage = errorJson.detail;
+            }
+        } catch (e) {
+            // Not a JSON error, use the original message
+        }
+        statusElement.textContent = `Error: ${errorMessage}`;
         statusElement.classList.add('generation-error');
         spinnerElement.style.display = 'none';
     }
@@ -528,11 +548,52 @@ function displayGeneratedAudio(results, cardElement) {
     const audioContainer = document.createElement('div');
     audioContainer.className = 'audio-container';
     results.forEach(result => {
+        const trackElement = document.createElement('div');
+        trackElement.className = 'audio-track';
+
         const audio = new Audio(result.audio_url);
         audio.controls = true;
-        audioContainer.appendChild(audio);
+        
+        const downloadBtn = document.createElement('button');
+        downloadBtn.className = 'btn btn-secondary';
+        downloadBtn.textContent = 'Download';
+        downloadBtn.onclick = () => downloadAudio(result.audio_url, result.title);
+
+        trackElement.appendChild(audio);
+        trackElement.appendChild(downloadBtn);
+        audioContainer.appendChild(trackElement);
     });
     cardElement.appendChild(audioContainer);
+}
+
+async function downloadAudio(audioUrl, title) {
+    try {
+        const apiKey = document.getElementById('apiKey').value;
+        const response = await fetch(`/api/download-audio?url=${encodeURIComponent(audioUrl)}&title=${encodeURIComponent(title)}`, {
+            headers: {
+                'Authorization': `Bearer ${apiKey}`
+            }
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || 'Failed to download audio.');
+        }
+
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.style.display = 'none';
+        a.href = url;
+        a.download = `${title}.mp3`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        a.remove();
+
+    } catch (err) {
+        alert(`Error downloading audio: ${err.message}`);
+    }
 }
 
 function openQuickGenTab(evt, tabName) {
@@ -549,47 +610,51 @@ function openQuickGenTab(evt, tabName) {
 }
 
 async function handleQuickGenerate() {
-    const simplePrompt = document.getElementById('quickGenSimplePrompt').value;
-    const advancedStyle = document.getElementById('quickGenAdvancedStyle').value;
-    const advancedLyrics = document.getElementById('quickGenAdvancedLyrics').value;
+    const activeTab = document.querySelector('.quick-generation-tab-content.active').id;
     const title = document.getElementById('quickGenTitle').value;
     const instrumental = document.getElementById('quickGenInstrumental').checked;
-
-    const activeTab = document.querySelector('.quick-generation-tab-content.active').id;
     
-    let requestBody;
+    let payload;
     let promptName;
 
     if (activeTab === 'quickGenSimple') {
+        const simplePrompt = document.getElementById('quickGenSimplePrompt').value;
         if (!simplePrompt.trim()) {
             alert('Please enter a prompt.');
             return;
         }
-        requestBody = {
+        payload = {
             prompt: simplePrompt,
             is_custom: false,
             title: title || 'AI Music (Simple)',
-            instrumental: instrumental
+            instrumental: instrumental,
+            tags: simplePrompt.split(',').slice(0, 3).join(', ') // Basic tags from prompt
         };
         promptName = "Quick Gen (Simple)";
     } else {
+        const advancedStyle = document.getElementById('quickGenAdvancedStyle').value;
+        const advancedLyrics = document.getElementById('quickGenAdvancedLyrics').value;
         if (!advancedStyle.trim() && !advancedLyrics.trim()) {
             alert('Please enter a style or lyrics for advanced generation.');
             return;
         }
-        requestBody = {
+        payload = {
             prompt: {
                 style_prompt: advancedStyle,
                 lyrics_prompt: advancedLyrics
             },
             is_custom: true,
             title: title || 'AI Music (Advanced)',
+            tags: advancedStyle,
             instrumental: instrumental
         };
         promptName = "Quick Gen (Advanced)";
     }
 
-    // Reuse the existing generateMusic function's logic but adapted for this new flow
+    await _executeGeneration(promptName, payload);
+}
+
+async function _executeGeneration(promptName, payload) {
     openTab({ currentTarget: document.querySelector('.tab-link[onclick*="sunoGenerations"]') }, 'sunoGenerations');
     
     const generationsContainer = document.getElementById('generationsContainer');
@@ -601,14 +666,28 @@ async function handleQuickGenerate() {
             <div class="spinner"></div>
         </div>
         <div class="generation-status">Status: Queued</div>
+        <div class="generation-progress-container">
+            <div class="generation-progress-bar"></div>
+        </div>
     `;
     generationsContainer.appendChild(generationCard);
 
     try {
+        const apiKey = document.getElementById('apiKey').value;
+        if (!apiKey) {
+            alert('Please enter your Suno API key.');
+            generationCard.querySelector('.generation-status').textContent = 'Error: API Key is missing.';
+            generationCard.querySelector('.spinner').style.display = 'none';
+            return;
+        }
+
         const response = await fetch('/api/generate-music', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(requestBody)
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${apiKey}`
+            },
+            body: JSON.stringify(payload)
         });
         const data = await response.json();
 
@@ -616,13 +695,147 @@ async function handleQuickGenerate() {
             throw new Error(data.error);
         }
 
-        pollGenerationStatus(data.request_id, generationCard);
+        const generationIds = data.map(clip => clip.id).join(',');
+        pollGenerationStatus(generationIds, generationCard);
+
+       fetchCredits(); // Refresh credits after generation
 
     } catch (err) {
         const statusElement = generationCard.querySelector('.generation-status');
-        statusElement.textContent = `Error: ${err.message}`;
+        let errorMessage = err.message;
+        try {
+            const errorJson = JSON.parse(err.message);
+            if (errorJson.detail) {
+                errorMessage = errorJson.detail;
+            }
+        } catch (e) {
+            // Not a JSON error, use the original message
+        }
+        statusElement.textContent = `Error: ${errorMessage}`;
         statusElement.classList.add('generation-error');
         generationCard.querySelector('.spinner').style.display = 'none';
+    }
+}
+
+
+// --- Account Management ---
+async function loadAccounts() {
+    try {
+        const response = await fetch('/api/accounts');
+        const accounts = await response.json();
+        renderAccounts(accounts);
+    } catch (err) {
+        console.error('Error loading accounts:', err);
+        accountsList.innerHTML = '<p>Could not load accounts.</p>';
+    }
+}
+
+function renderAccounts(accounts) {
+    if (Object.keys(accounts).length === 0) {
+        accountsList.innerHTML = '<p>No accounts configured.</p>';
+        return;
+    }
+    accountsList.innerHTML = Object.entries(accounts).map(([name, data]) => `
+        <div class="account-item ${data.default ? 'default' : ''}">
+            <span>${name} ${data.default ? '(Default)' : ''}</span>
+            <div>
+                <button class="btn btn-secondary" onclick="setDefaultAccount('${name}')">Set Default</button>
+                <button class="btn btn-danger" onclick="removeAccount('${name}')">Remove</button>
+            </div>
+        </div>
+    `).join('');
+}
+
+async function addAccount() {
+    const name = document.getElementById('accountName').value;
+    const apiKey = document.getElementById('accountApiKey').value;
+
+    if (!name.trim() || !apiKey.trim()) {
+        alert('Please provide both an account name and an API key.');
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/accounts', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, api_key: apiKey })
+        });
+        const result = await response.json();
+        if (result.success) {
+            document.getElementById('accountName').value = '';
+            document.getElementById('accountApiKey').value = '';
+            loadAccounts();
+            fetchCredits(); // Refresh credits after adding a new default
+        } else {
+            throw new Error(result.error);
+        }
+    } catch (err) {
+        alert(`Error adding account: ${err.message}`);
+    }
+}
+
+async function removeAccount(name) {
+    if (!confirm(`Are you sure you want to remove the account "${name}"?`)) {
+        return;
+    }
+    try {
+        const response = await fetch('/api/accounts', {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name })
+        });
+        const result = await response.json();
+        if (result.success) {
+            loadAccounts();
+            fetchCredits(); // Refresh credits if the default was removed
+        } else {
+            throw new Error(result.error);
+        }
+    } catch (err) {
+        alert(`Error removing account: ${err.message}`);
+    }
+}
+
+async function setDefaultAccount(name) {
+    try {
+        const response = await fetch('/api/accounts/default', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name })
+        });
+        const result = await response.json();
+        if (result.success) {
+            loadAccounts();
+            fetchCredits(); // Refresh credits with the new default account
+        } else {
+            throw new Error(result.error);
+        }
+    } catch (err) {
+        alert(`Error setting default account: ${err.message}`);
+    }
+}
+
+async function fetchCredits() {
+    const apiKey = document.getElementById('apiKey').value;
+    if (!apiKey) {
+        creditsDisplay.textContent = 'N/A';
+        return;
+    }
+    try {
+        const response = await fetch('/api/credits', {
+            headers: { 'Authorization': `Bearer ${apiKey}` }
+        });
+        const data = await response.json();
+        if (data.error) {
+            creditsDisplay.textContent = 'Error';
+            console.error('Error fetching credits:', data.error);
+        } else {
+            creditsDisplay.textContent = data.credits;
+        }
+    } catch (err) {
+        creditsDisplay.textContent = 'Error';
+        console.error('Error fetching credits:', err);
     }
 }
 
@@ -630,7 +843,21 @@ async function handleQuickGenerate() {
 // Initial population of genres
 document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('quickGenerateBtn').addEventListener('click', handleQuickGenerate);
+    addAccountBtn.addEventListener('click', addAccount);
     populateGenres();
+    fetchCredits(); // Initial fetch
+    setInterval(fetchCredits, 60000); // Refresh credits every 60 seconds
+
+    // --- API Key Persistence ---
+    const apiKeyInput = document.getElementById('apiKey');
+    const savedApiKey = localStorage.getItem('sunoApiKey');
+    if (savedApiKey) {
+        apiKeyInput.value = savedApiKey;
+    }
+
+    apiKeyInput.addEventListener('input', () => {
+        localStorage.setItem('sunoApiKey', apiKeyInput.value);
+    });
 
     // --- Theme Switcher Logic ---
     const currentTheme = localStorage.getItem('theme');
@@ -657,6 +884,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
     closeHistoryBtn.addEventListener('click', () => {
         historyPanel.classList.remove('open');
+    });
+
+    generationHistoryBtn.addEventListener('click', () => {
+        generationHistoryPanel.classList.add('open');
+        loadGenerationHistory();
+    });
+
+    closeGenerationHistoryBtn.addEventListener('click', () => {
+        generationHistoryPanel.classList.remove('open');
     });
 
     saveHistoryBtn.addEventListener('click', async () => {
@@ -703,6 +939,39 @@ document.addEventListener('DOMContentLoaded', () => {
 
         } catch (err) {
             historyContainer.innerHTML = '<p>Could not load history.</p>';
+        }
+    }
+
+    async function loadGenerationHistory() {
+        try {
+            const response = await fetch('/api/generation-history');
+            const history = await response.json();
+            generationHistoryContainer.innerHTML = history.map(item => `
+                <div class="history-item" data-id="${item.id}">
+                    <div class="history-item-date">${new Date(item.timestamp).toLocaleString()}</div>
+                    <div class="history-item-title">${item.title || 'Untitled'}</div>
+                </div>
+            `).join('');
+
+            // Add event listeners to history items
+            document.querySelectorAll('#generationHistoryContainer .history-item').forEach(item => {
+                item.addEventListener('click', () => {
+                    const selected = history.find(h => h.id === item.dataset.id);
+                    if (selected) {
+                        // We can't fully "load" a generation, but we can show it in the UI
+                        openTab({ currentTarget: document.querySelector('.tab-link[onclick*="sunoGenerations"]') }, 'sunoGenerations');
+                        const generationsContainer = document.getElementById('generationsContainer');
+                        const generationCard = document.createElement('div');
+                        generationCard.className = 'generation-card';
+                        displayGeneratedAudio([selected], generationCard);
+                        generationsContainer.prepend(generationCard);
+                        generationHistoryPanel.classList.remove('open');
+                    }
+                });
+            });
+
+        } catch (err) {
+            generationHistoryContainer.innerHTML = '<p>Could not load generation history.</p>';
         }
     }
 });

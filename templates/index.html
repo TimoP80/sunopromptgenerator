@@ -11,6 +11,8 @@
         <div class="header">
             <div class="header-controls">
                 <button class="btn btn-icon" id="historyBtn" title="Analysis History">📜</button>
+                <button class="btn btn-icon" id="generationHistoryBtn" title="Generation History">🎶</button>
+                <button class="btn btn-icon" id="settingsBtn" title="Settings">⚙️</button>
                 <div class="theme-switcher-container">
                     <label class="theme-switcher">
                         <input type="checkbox" id="themeToggle">
@@ -69,6 +71,10 @@
                     <label for="quickGenInstrumental">Instrumental</label>
                 </div>
             </div>
+            <div class="form-group">
+                <label for="apiKey">Suno API Key:</label>
+                <input type="password" id="apiKey" placeholder="Enter your Suno API key...">
+            </div>
             <button class="btn" id="quickGenerateBtn" style="margin-top: 15px;">Generate Music</button>
         </div>
 
@@ -84,6 +90,9 @@
                         AI Processing (Demucs & Whisper):
                         {% if pytorch_gpu %}<span class="active">● GPU</span>{% else %}<span class="inactive">● CPU</span>{% endif %}
                     </div>
+                </div>
+                <div class="credits-info">
+                    <span>💰 Suno Credits: <span id="credits-display">N/A</span></span>
                 </div>
             </div>
 
@@ -207,6 +216,24 @@
                 </form>
             </div>
         </div>
+
+        <!-- Settings Modal -->
+        <div id="settingsModal" class="modal">
+            <div class="modal-content">
+                <span class="close-btn" id="settingsCloseBtn">&times;</span>
+                <h2>Settings</h2>
+                
+                <div class="settings-section">
+                    <h3>🔑 Suno Accounts</h3>
+                    <div id="accountsList"></div>
+                    <div class="form-group">
+                        <input type="text" id="accountName" placeholder="Account Name">
+                        <input type="password" id="accountApiKey" placeholder="Suno API Key">
+                    </div>
+                    <button class="btn" id="addAccountBtn">Add Account</button>
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- History Panel -->
@@ -215,6 +242,15 @@
         <h2>Analysis History</h2>
         <div id="historyContainer">
             <!-- History items will be populated here -->
+        </div>
+    </div>
+
+    <!-- Generation History Panel -->
+    <div id="generationHistoryPanel" class="history-panel">
+        <button class="close-btn" id="closeGenerationHistoryBtn">&times;</button>
+        <h2>Generation History</h2>
+        <div id="generationHistoryContainer">
+            <!-- Generation history items will be populated here -->
         </div>
     </div>
 

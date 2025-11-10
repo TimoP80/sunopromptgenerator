@@ -2,161 +2,171 @@ import requests
 import config
 import logging
 import time
-from typing import Optional, Dict, Any, Union
+from typing import Optional, Dict, Any
+from pydantic import BaseModel, Field, ValidationError, NonNegativeInt
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 # --- Custom Exceptions ---
 class SunoError(Exception):
     """Base exception for Suno API errors."""
-    pass
+    def __init__(self, message, response_data=None):
+        super().__init__(message)
+        self.response_data = response_data
 
 class SunoAuthError(SunoError):
     """Raised for authentication errors."""
     pass
 
-class SunoRateLimitError(SunoError):
-    """Raised for rate limit errors."""
+class APIParsingError(SunoError):
+    """Raised when API response parsing fails."""
     pass
 
-class SunoServerError(SunoError):
-    """Raised for server-side errors."""
-    pass
+# --- Data Models ---
 
 class SunoClient:
     """A client for interacting with the official Suno API."""
 
-    BASE_URL = "https://studio-api.suno.ai"
-    STATUS_CODE_MESSAGES = {
-        400: "Invalid parameters",
-        401: "Unauthorized access",
-        404: "Invalid request method or path",
-        405: "Rate limit exceeded",
-        413: "Theme or prompt too long",
-        429: "Insufficient credits",
-        430: "Your call frequency is too high. Please try again later.",
-        455: "System maintenance",
-        500: "Server error",
-        503: "Service Unavailable",
-    }
-
-    def __init__(self, api_key: Optional[str] = None, retries: int = 3, backoff_factor: float = 0.5):
-        self.api_key = api_key or config.SUNO_API_KEY
-        if not self.api_key:
-            raise SunoAuthError("Suno API key is not configured.")
-        
+    def __init__(self, api_key: Optional[str] = None, base_url: str = "https://api.sunoapi.org"):
+        if not api_key:
+            raise SunoAuthError("API key is required for authentication.")
+        self.api_key = api_key
+        self.base_url = base_url
         self.session = requests.Session()
         self.session.headers.update({
-            "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json; charset=utf-8",
+            "Authorization": f"Bearer {self.api_key}"
         })
-        self.retries = retries
-        self.backoff_factor = backoff_factor
 
-    def _request(self, method: str, endpoint: str, **kwargs) -> Dict[str, Any]:
-        """
-        Makes a request to the Suno API with error handling and retries.
-        """
-        url = f"{self.BASE_URL}{endpoint}"
-        for attempt in range(self.retries):
+    def _request(self, method: str, endpoint: str, **kwargs) -> Any:
+        """Makes a request to the Suno API with exponential backoff."""
+        url = f"{self.base_url}{endpoint}"
+        max_retries = 5
+        initial_delay = 1.0
+        backoff_factor = 2.0
+
+        for attempt in range(max_retries):
             try:
                 response = self.session.request(method, url, timeout=60, **kwargs)
-                response.raise_for_status()
-                return response.json()
+                
+                if response.status_code == 200:
+                    if 'application/json' in response.headers.get('Content-Type', ''):
+                        return response.json()
+                    return response.content
+                
+                elif response.status_code == 503:
+                    delay = initial_delay * (backoff_factor ** attempt)
+                    logging.warning(f"Attempt {attempt + 1}: Service unavailable (503). Retrying in {delay:.2f}s...")
+                    time.sleep(delay)
+                    continue
+
+                response.raise_for_status() # Raise HTTPError for other bad responses (4xx or 5xx)
+
             except requests.exceptions.HTTPError as e:
-                status_code = e.response.status_code
-                message = self.STATUS_CODE_MESSAGES.get(status_code, 'An unknown API error occurred.')
-                
-                if status_code == 401:
-                    raise SunoAuthError(f"Suno API Error ({status_code}): {message}") from e
-                if status_code in [405, 429, 430]:
-                    if attempt < self.retries - 1:
-                        sleep_time = self.backoff_factor * (2 ** attempt)
-                        logging.warning(f"Rate limit exceeded. Retrying in {sleep_time:.2f} seconds...")
-                        time.sleep(sleep_time)
-                        continue
-                    raise SunoRateLimitError(f"Suno API Error ({status_code}): {message}") from e
-                if status_code >= 500:
-                    raise SunoServerError(f"Suno API Error ({status_code}): {message}") from e
-                
-                raise SunoError(f"Suno API Error ({status_code}): {message}") from e
+                if e.response.status_code == 401:
+                    raise SunoAuthError("Unauthorized access. Check your API key.") from e
+                if e.response.status_code == 429:
+                    raise SunoError("Rate limit exceeded. Please try again later.") from e
+                logging.error(f"HTTP Error Response: {e.response.text}")
+                raise SunoError(f"HTTP Error: {e.response.status_code} {e.response.reason}") from e
+            
             except requests.exceptions.RequestException as e:
-                raise SunoError(f"Network Connection Error: {e}") from e
-
-    def generate_music(self, prompt: Union[str, Dict[str, str]], is_custom: bool = False, title: str = 'AI Music', instrumental: bool = False, **kwargs) -> Dict[str, Any]:
-        """
-        Generates music using the Suno API.
-        """
-        endpoint = "/api/v2/generate"
+                delay = initial_delay * (backoff_factor ** attempt)
+                logging.warning(f"Network connection error on attempt {attempt + 1}. Retrying in {delay:.2f} seconds...")
+                time.sleep(delay)
+                continue
         
+        raise SunoError(f"Request failed after {max_retries} attempts.")
+
+    def generate_music(self, prompt_data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Generates music using the Suno API v1.
+        """
+        endpoint = "/api/v1/generate"
+        
+        is_custom = prompt_data.get('is_custom', False)
+        
+        payload = {
+            "model": "V5",
+            "make_instrumental": prompt_data.get('instrumental', False),
+        }
+
         if is_custom:
-            payload = {
-                "prompt": prompt.get('lyrics_prompt', ''),
-                "tags": prompt.get('style_prompt', ''),
-                "title": title,
-                "instrumental": instrumental,
-                "customMode": True,
-                "model": "chirp-v3-0"
-            }
+            payload["title"] = prompt_data.get('title', 'AI Music')
+            payload["tags"] = prompt_data.get('tags', '')
+            payload["prompt"] = prompt_data.get('prompt', '') # Full lyrics for custom mode
         else:
-            payload = {
-                "prompt": prompt,
-                "instrumental": instrumental,
-                "customMode": False,
-                "model": "chirp-v3-0"
-            }
-        
+            payload["prompt"] = prompt_data.get('prompt', '') # Descriptive prompt for simple mode
+
         logging.info(f"Generating music with payload: {payload}")
-        return self._request("POST", endpoint, json=payload, **kwargs)
-
-    def check_generation_status(self, request_id: str) -> Dict[str, Any]:
-        """
-        Checks the status of a music generation request.
-        """
-        endpoint = f"/api/v2/status/{request_id}"
-        logging.info(f"Checking generation status for request ID: {request_id}")
-        return self._request("GET", endpoint)
-    def get_credits(self) -> Dict[str, Any]:
-        """
-        Gets the remaining credits for the API key.
-        """
-        endpoint = "/api/v2/credits"
-        logging.info("Fetching credits...")
-        return self._request("GET", endpoint)
-
-    def get_songs(self, ids: Optional[list[str]] = None) -> Dict[str, Any]:
-        """
-        Gets a list of all generated songs or specific songs by their IDs.
-        """
-        endpoint = "/api/v2/songs"
-        params = {"ids": ",".join(ids)} if ids else {}
-        logging.info(f"Fetching songs with IDs: {ids}" if ids else "Fetching all songs...")
-        return self._request("GET", endpoint, params=params)
-
-    def get_song(self, song_id: str) -> Dict[str, Any]:
-        """
-        Gets detailed information for a single song.
-        """
-        endpoint = f"/api/v2/songs/{song_id}"
-        logging.info(f"Fetching song with ID: {song_id}...")
-        return self._request("GET", endpoint)
-
-    def generate_lyrics(self, prompt: str) -> Dict[str, Any]:
-        """
-        Generates lyrics using the Suno API.
-        """
-        endpoint = "/api/v2/lyrics"
-        payload = {"prompt": prompt}
-        logging.info(f"Generating lyrics with prompt: {prompt}")
         return self._request("POST", endpoint, json=payload)
 
-    def extend_audio(self, audio_path: str, start_time: float) -> Dict[str, Any]:
+    def check_generation_status(self, generation_ids: list[str]) -> Dict[str, Any]:
         """
-        Uploads and extends an existing audio file.
+        Checks the status of a music generation request using generation IDs.
         """
-        endpoint = "/api/v2/extend"
-        with open(audio_path, "rb") as f:
-            files = {"file": (audio_path, f, "audio/mpeg")}
-            data = {"start_time": start_time}
-            logging.info(f"Extending audio file: {audio_path} from {start_time}s")
-            return self._request("POST", endpoint, files=files, data=data)
+        ids_param = ",".join(generation_ids)
+        endpoint = f"/api/v1/generate/{ids_param}"
+        logging.info(f"Checking generation status for IDs: {ids_param}")
+        response_data = self._request("GET", endpoint)
+
+        final_results = {'status': 'processing', 'results': []}
+
+        # Handle cases where the API returns a single error object instead of a list
+        if not isinstance(response_data, list):
+            if isinstance(response_data, dict) and response_data.get('detail'):
+                logging.error(f"Suno API returned an error: {response_data['detail']}")
+                final_results['status'] = 'failed'
+                final_results['message'] = response_data['detail']
+                return final_results
+            # If it's not an error, wrap it in a list for consistent processing
+            response_data = [response_data]
+
+        statuses = [track.get('status') for track in response_data]
+
+        # 1. Check for failure: if any track has failed, the whole job is failed.
+        if any(s in ['error', 'failed', 'stalled'] for s in statuses):
+            final_results['status'] = 'failed'
+            failed_track = next((t for t in response_data if t.get('status') in ['error', 'failed', 'stalled']), None)
+            if failed_track:
+                final_results['message'] = failed_track.get('error_message', f"A track entered status: {failed_track.get('status')}")
+        
+        # 2. Check for completion: if all tracks are complete.
+        elif all(s == 'complete' for s in statuses):
+            final_results['status'] = 'completed'
+
+        # 3. Otherwise, it's still processing. The status is already 'processing'.
+
+        # Always populate results with any tracks that have completed so far.
+        for track in response_data:
+            if track.get('status') == 'complete':
+                final_results['results'].append({
+                    'id': track.get('id'),
+                    'audio_url': track.get('audio_url'),
+                    'title': track.get('title'),
+                    'is_instrumental': track.get('metadata', {}).get('make_instrumental', False),
+                })
+        
+        return final_results
+
+    def get_credits(self) -> Dict[str, Any]:
+        """
+        Gets the account status and remaining credits for the API key.
+        """
+        endpoint = "/api/v1/generate/credit"
+        logging.info("Fetching account credits...")
+        response_data = self._request("GET", endpoint)
+        credits = response_data.get("data")
+        if credits is None:
+            raise APIParsingError("Malformed response from credits endpoint: missing 'data' field.", response_data=response_data)
+        return {"credits": credits}
+
+    def download_audio(self, audio_url: str) -> bytes:
+        """Downloads audio content from a given URL."""
+        logging.info(f"Downloading audio from: {audio_url}")
+        try:
+            response = requests.get(audio_url, timeout=60)
+            response.raise_for_status()
+            return response.content
+        except requests.exceptions.RequestException as e:
+            logging.error(f"Failed to download audio: {e}")
+            raise SunoError(f"Failed to download audio from {audio_url}") from e

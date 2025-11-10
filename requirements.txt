@@ -44,6 +44,7 @@ pandas==2.2.3
 pefile==2023.2.7
 pillow==12.0.0
 platformdirs==4.5.0
+playwright==1.44.0
 pooch==1.8.2
 py-cpuinfo==9.0.0
 pycparser==2.23
@@ -54,6 +55,7 @@ python-dateutil==2.9.0.post0
 pytz==2025.2
 pywin32-ctypes==0.2.3
 PyYAML==6.0.3
+pydantic==2.7.1
 regex==2025.11.3
 requests==2.32.3
 resampy==0.4.3
@@ -68,8 +70,8 @@ sv-ttk==2.5.5
 sympy==1.13.3
 threadpoolctl==3.6.0
 tiktoken==0.12.0
-torch==2.9.0
-torchaudio==2.9.0
+# torch==2.9.0
+# torchaudio==2.9.0
 tqdm==4.66.5
 treetable==0.2.6
 typing_extensions==4.15.0

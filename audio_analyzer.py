@@ -7,7 +7,7 @@ import os
 import sys
 import torch
 import importlib
-import genre_rules
+import json
 import mutagen
 import audioread
 
@@ -101,6 +101,16 @@ class AudioAnalyzer:
         self.features = {}
         self.device = device
         self.model_cache = model_cache if model_cache is not None else {}
+        self.genre_rules = self._load_genre_rules()
+
+    def _load_genre_rules(self):
+        """Loads genre rules from the external JSON file."""
+        try:
+            with open("genre_rules.json", "r") as f:
+                return json.load(f)
+        except (FileNotFoundError, json.JSONDecodeError) as e:
+            print(f"Warning: Could not load or parse genre_rules.json: {e}. Using an empty list.")
+            return []
 
     def load_audio(self):
         """Load audio file"""
@@ -307,11 +317,7 @@ class AudioAnalyzer:
         spectral_centroid = self.features.get('spectral_centroid', 0)
 
         # --- Rule Matching ---
-        # Reload the genre rules module to get the latest rules
-        importlib.reload(genre_rules)
-        current_genre_rules = genre_rules.GENRE_RULES
-
-        for entry in current_genre_rules:
+        for entry in self.genre_rules:
             rules = entry.get('rules', [])
             
             # Handle OR conditions (rules as a list)
@@ -364,9 +370,9 @@ class AudioAnalyzer:
 
     def classify_mood(self):
         """Classify mood based on features"""
-        energy = self.features['energy']
-        tempo = self.features['tempo']
-        key = self.features['key']
+        energy = self.features.get('energy', 'medium')
+        tempo = self.features.get('tempo', 120)
+        key = self.features.get('key', 'C')
         
         # Minor keys (simplified)
         minor_keys = ['C#', 'D#', 'F#', 'G#', 'A#']
@@ -386,31 +392,17 @@ class AudioAnalyzer:
         return "Upbeat"
 
     def detect_instruments(self, genre):
-        """Detect likely instruments based on a genre-to-instrument mapping."""
-        instrument_map = {
-            "Trance": ["synthesizer", "drum machine", "bassline", "synth pads", "arpeggiator", "pluck synth"],
-            "House": ["drum machine", "synthesizer", "bassline", "piano", "vocals", "saxophone", "funky guitar"],
-            "Techno": ["drum machine", "synthesizer", "sequencer", "sampler", "industrial percussion"],
-            "Hard Techno": ["distorted drum machine", "industrial sounds", "hoover synth", "acid bassline", "dark synth stabs"],
-            "Drum & Bass": ["breakbeat", "sub-bass", "sampler", "synthesizer", "Reese bass"],
-            "Hardcore": ["distorted kick drum", "synthesizer", "sampler", "hoover synth", "aggressive synth"],
-            "Gabber": ["distorted kick drum", "synthesizer", "sampler", "hoover synth", "aggressive synth"],
-            "Hardstyle": ["reverse bass", "distorted kick", "screeching synth", "euphoric melody"],
-            "Frenchcore": ["distorted kick", "uptempo bassline", "sampler", "aggressive synth lead"],
-            "Gabberdisco": ["disco beat", "funky bassline", "gabber kick", "vocal samples", "string stabs", "electric piano"],
-            "Pop": ["vocals", "synthesizer", "drum machine", "electric guitar", "bass guitar", "piano"],
-            "Rock": ["electric guitar", "bass guitar", "drums", "vocals", "acoustic guitar"],
-            "Metal": ["distorted electric guitar", "double-bass drums", "bass guitar", "screaming vocals"],
-            "Hip-Hop": ["drum machine", "sampler", "turntables", "vocals", "synthesizer", "808 bass"],
-            "Ambient": ["synth pads", "drones", "field recordings", "soundscapes", "textures"]
-        }
-
-        # Get the base genre
-        base_genre = genre.split('/')[0]
-
-        # Find matching instruments, default to a generic list
-        instruments = instrument_map.get(base_genre, ["synthesizer", "drums", "bass"])
+        """Detect likely instruments based on the genre rules."""
         
+        # Find the corresponding genre rule
+        genre_rule = next((rule for rule in self.genre_rules if rule['genre'] == genre), None)
+        
+        if genre_rule and 'typical_instruments' in genre_rule:
+            instruments = genre_rule['typical_instruments']
+        else:
+            # Fallback for genres not in the rules or without instrument lists
+            instruments = ["synthesizer", "drums", "bass"]
+
         # Add some general instruments based on spectral features as an addition
         spectral_centroid = self.features.get('spectral_centroid', 0)
         if spectral_centroid > 2800 and "bright synth" not in instruments:
@@ -419,15 +411,15 @@ class AudioAnalyzer:
             instruments.append("deep bass")
 
         # Randomly select a subset to keep it varied
-        num_instruments = random.randint(3, 5)
+        num_instruments = random.randint(3, min(5, len(instruments)))
         random.shuffle(instruments)
         
-        return list(set(instruments[:num_instruments])) # Return unique instruments
+        return list(set(instruments[:num_instruments]))
 
     def detect_vocals(self):
         """Detect if vocals are present"""
         # Simplified vocal detection based on spectral features
-        spectral_centroid = self.features['spectral_centroid']
+        spectral_centroid = self.features.get('spectral_centroid', 0)
         
         # Vocals typically have spectral centroid in 1000-4000 Hz range
         if 1000 < spectral_centroid < 4000:

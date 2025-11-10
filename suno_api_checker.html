@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Suno API Key Checker</title>
+</head>
+<body>
+    <h1>Suno API Key Validity Check</h1>
+    <p>Open the developer console (F12) to see the logs.</p>
+
+    <script>
+        const API_KEY = "4236f0385907757e4f1e7bb0de1ffb3a"; // Replace with your Suno API key
+        const API_URL = "https://api.sunoapi.org/api/v1/generate";
+
+        // Step 1: Create a music generation request
+        async function generateMusic(promptText) {
+          try {
+            const response = await fetch(API_URL, {
+              method: "POST",
+              headers: {
+                "Authorization": `Bearer ${API_KEY}`,
+                "Content-Type": "application/json"
+              },
+              body: JSON.stringify({
+                customMode: false,       // non-custom mode for simplicity
+                instrumental: false,     // include vocals
+                model: "V5",           // choose model
+                prompt: promptText,      // your music description
+                callBackUrl: "http://localhost" // Required by the API
+              })
+            });
+
+            if (!response.ok) {
+              console.error("API Error:", response.status, await response.text());
+              return;
+            }
+            
+            const data = await response.json();
+            console.log("Full API Response:", data);
+
+            if (response.ok) {
+              console.log("Generation request accepted. Task ID:", data.data.taskId);
+              return data.data.taskId;
+            } else {
+              console.error("Error generating music:", data.msg || data);
+            }
+          } catch (err) {
+            console.error("Network or fetch error:", err);
+          }
+        }
+
+        // Step 2: Poll the task status until track URL is ready
+        async function checkTaskStatus(taskId) {
+          const STATUS_URL = `https://api.sunoapi.org/api/v1/task/${taskId}`; // Check docs for exact endpoint
+          try {
+            const res = await fetch(STATUS_URL, {
+              headers: { "Authorization": `Bearer ${API_KEY}` }
+            });
+            if (!res.ok) {
+              console.error("API Error:", res.status, await res.text());
+              return;
+            }
+            const result = await res.json();
+            
+            if (res.ok) {
+              console.log("Task status:", result.data.status);
+              if (result.data.status === "finished") {
+                console.log("Stream URL:", result.data.streamUrl);
+                console.log("Download URL:", result.data.downloadUrl);
+                return result.data;
+              } else {
+                console.log("Still processing... try again in a few seconds");
+                return null;
+              }
+            } else {
+              console.error("Error checking task:", result.msg || result);
+            }
+          } catch (err) {
+            console.error("Network error checking task:", err);
+          }
+        }
+
+        // Example usage
+        (async () => {
+          const taskId = await generateMusic("A relaxing piano melody with soft rain in the background");
+          if (taskId) {
+            // Poll every 10 seconds until track is ready
+            const interval = setInterval(async () => {
+              const status = await checkTaskStatus(taskId);
+              if (status && status.status === "finished") {
+                clearInterval(interval);
+                console.log("Music ready to play or download!");
+              }
+            }, 10000);
+          }
+        })();
+    </script>
+</body>
+</html>

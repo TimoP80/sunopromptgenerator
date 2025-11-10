@@ -119,3 +119,10 @@ ffprobe.exe
 
 # Environment variables
 .env
+
+
+# User-specific data
+suno_accounts.json
+
+# Uploaded media files
+uploads/
