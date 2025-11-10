@@ -1,11 +1,47 @@
 # Changelog
 
+## [2.0.0] - 2025-11-10
+
+### Added
+
+- **New Web Interface &amp; Flask Backend:** A modern, single-page web application served by a robust Flask backend (`app.py`), exposing a REST API and using a `waitress` server.
+- **Official Suno API v1 Integration:** The application now uses the official Suno API via the new `suno_client.py` module, which handles authenticated requests and error handling.
+- **Advanced Music Generation &amp; Workflow:**
+    - "Quick Generation" to create music directly from text prompts.
+    - Full support for Suno's "Custom Mode" with distinct inputs for "Style of Music" and "Lyrics".
+    - Asynchronous music generation with API polling.
+- **Enhanced User Experience:**
+    - Real-time progress updates and a progress bar for the analysis process.
+    - A two-step analysis workflow showing "Quick Info" (metadata) before the full analysis.
+    - Separate, slide-out panels for "Analysis History" and "Generation History".
+    - Waveform visualization for uploaded audio files using WaveSurfer.js.
+- **Account &amp; Settings Management:**
+    - Multi-account support with the ability to add, remove, and set a default account.
+    - Automatic fetching and display of remaining Suno credits.
+- **Improved Audio Analysis &amp; Prompt Generation:**
+    - Vocal gender detection from separated vocal tracks.
+    - Updated prompt generation logic for Suno v5, including "Thematic" and "Refinement" variations.
+    - Generation of a structured lyrics template with metadata and timestamps.
+- **Standalone Desktop GUI:** A responsive desktop application (`gui.py`) is available, using `multiprocessing` for background analysis and an integrated `pygame` audio player.
+
+### Changed
+
+- **Architectural Overhaul:** The application has been transformed from a monolithic script into a modular client-server application.
+- **Project Structure &amp; Portability:** The project is now modularized, and pretrained models are cached locally for portability.
+
 ## [1.5.0] - 2025-11-10
 
 ### Added
 
-- *No changes yet.*
+- **Complete Suno API Migration:** Overhauled the entire application to use the official Suno API (`docs.sunoapi.org`). This involved rewriting the `suno_client`, updating the `gui.py` to handle new data structures, and aligning the `app.py` backend to the new API workflows for music generation, status checking, and credit retrieval.
 
+### Fixed
+
+- **Suno API Client:**
+  - Corrected the credits endpoint from `/get-credits` to `/credits/get-credits-info` to resolve 404 errors.
+  - Added specific error handling for `HTTP 429` to gracefully manage rate-limiting.
+  - Enhanced the `generate_music` function to accept a `model` parameter for more flexible version control.
+  - Improved the `get_credits` function to return the full JSON response, providing more detailed credit information.
 ## [1.4.0] - 2025-11-09
 
 ### Major Features
